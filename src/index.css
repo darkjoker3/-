@@ -1,0 +1,376 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* レスポンシブ標準フォントサイズ (16px) & テキスト自動調整 */
+:root,
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  box-sizing: border-box;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+body {
+  width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html[data-ui-scale="75"] {
+  font-size: 13.5px;
+}
+
+html[data-ui-scale="85"] {
+  font-size: 14.5px;
+}
+
+html[data-ui-scale="100"] {
+  font-size: 16px;
+}
+
+/* iOS Safari & Chrome モバイルフォーム自動ズーム防止 */
+@media screen and (max-width: 768px) {
+  input[type="text"],
+  input[type="search"],
+  input[type="number"],
+  input[type="url"],
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Leaflet container full viewport & fluid scaling */
+.leaflet-container {
+  width: 100% !important;
+  height: 100% !important;
+  font-family: inherit !important;
+  background-color: #f1f5f9 !important; /* slate-100 fallback */
+  touch-action: pan-x pan-y pinch-zoom;
+}
+
+/* Leaflet DivIcon reset */
+.leaflet-div-icon {
+  background: transparent !important;
+  border: none !important;
+}
+
+/* Custom Speech-Bubble Popup Styles */
+.leaflet-popup.spot-custom-popup .leaflet-popup-content-wrapper {
+  padding: 0 !important;
+  border-radius: 1rem !important;
+  box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.15), 0 8px 10px -6px rgb(0 0 0 / 0.1) !important;
+  border: 1px solid rgba(226, 232, 240, 0.9) !important;
+  overflow: hidden !important;
+}
+
+.leaflet-popup.spot-custom-popup .leaflet-popup-content {
+  margin: 0 !important;
+  line-height: 1.4 !important;
+}
+
+.leaflet-popup.spot-custom-popup .leaflet-popup-tip {
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1) !important;
+  border: 1px solid rgba(226, 232, 240, 0.9) !important;
+}
+
+.leaflet-popup.spot-custom-popup .leaflet-popup-close-button {
+  top: 8px !important;
+  right: 8px !important;
+  width: 24px !important;
+  height: 24px !important;
+  color: #64748b !important;
+  background: rgba(255, 255, 255, 0.85) !important;
+  backdrop-filter: blur(4px) !important;
+  border-radius: 9999px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1) !important;
+  z-index: 20 !important;
+  font-size: 16px !important;
+}
+
+.leaflet-popup.spot-custom-popup .leaflet-popup-close-button:hover {
+  color: #0f172a !important;
+  background: #ffffff !important;
+}
+
+/* Ensure all interactive buttons inside popup receive clicks cleanly */
+.leaflet-popup.spot-custom-popup {
+  pointer-events: auto !important;
+}
+
+.leaflet-popup.spot-custom-popup button,
+.leaflet-popup.spot-custom-popup a {
+  pointer-events: auto !important;
+  cursor: pointer !important;
+  position: relative !important;
+  z-index: 10 !important;
+}
+
+/* User Location GPS Radar Pulse Animation */
+@keyframes userLocationRadarPulse {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.9;
+  }
+  65% {
+    opacity: 0.3;
+  }
+  100% {
+    transform: scale(3.2);
+    opacity: 0;
+  }
+}
+
+@keyframes userLocationCoreBreathe {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.7), 0 2px 6px rgba(0, 0, 0, 0.35);
+  }
+  50% {
+    transform: scale(1.15);
+    box-shadow: 0 0 14px 3px rgba(59, 130, 246, 0.9), 0 3px 8px rgba(0, 0, 0, 0.45);
+  }
+}
+
+.user-pulse-ring-1 {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.5) 0%, rgba(37, 99, 235, 0.2) 65%, rgba(37, 99, 235, 0) 100%);
+  border: 1.5px solid rgba(59, 130, 246, 0.85);
+  animation: userLocationRadarPulse 2.4s cubic-bezier(0.15, 0.6, 0.35, 1) infinite;
+  pointer-events: none;
+}
+
+.user-pulse-ring-2 {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.45) 0%, rgba(37, 99, 235, 0.15) 65%, rgba(37, 99, 235, 0) 100%);
+  border: 1.5px solid rgba(96, 165, 250, 0.75);
+  animation: userLocationRadarPulse 2.4s cubic-bezier(0.15, 0.6, 0.35, 1) infinite;
+  animation-delay: 1.2s;
+  pointer-events: none;
+}
+
+.user-pulse-core {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  border: 2.5px solid #ffffff;
+  animation: userLocationCoreBreathe 2.4s ease-in-out infinite;
+  z-index: 2;
+}
+
+.user-location-badge {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 23, 42, 0.9);
+  backdrop-filter: blur(4px);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(147, 197, 253, 0.7);
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  z-index: 3;
+}
+
+/* Prefecture Hover Grid/Hatch effect & Comment Tooltip */
+.prefecture-hover-tooltip,
+.leaflet-tooltip.prefecture-hover-tooltip {
+  background: #0f172a !important;
+  background-color: #0f172a !important;
+  color: #ffffff !important;
+  border: 2px solid #a855f7 !important;
+  border-radius: 0.75rem !important;
+  padding: 8px 14px !important;
+  box-shadow: 0 12px 30px -4px rgba(0, 0, 0, 0.7), 0 0 20px rgba(168, 85, 247, 0.45) !important;
+  backdrop-filter: blur(10px) !important;
+  font-family: inherit !important;
+  pointer-events: none !important;
+}
+
+.prefecture-hover-tooltip::before,
+.leaflet-tooltip.prefecture-hover-tooltip::before {
+  border-top-color: #0f172a !important;
+  border-bottom-color: #0f172a !important;
+}
+
+.prefecture-hover-tooltip * {
+  box-sizing: border-box;
+}
+
+/* SVG grid fill pattern for hovered prefecture polygon */
+.prefecture-grid-active {
+  fill: url(#pref-grid-pattern) !important;
+  fill-opacity: 0.75 !important;
+  stroke: #9333ea !important;
+  stroke-width: 3.5 !important;
+  stroke-dasharray: 6, 4 !important;
+  filter: drop-shadow(0 0 8px rgba(147, 51, 234, 0.45));
+  transition: all 0.2s ease;
+}
+
+/* Route Midpoint Distance & Duration Badge Marker */
+.leg-distance-badge-marker {
+  background: transparent !important;
+  border: none !important;
+  overflow: visible !important;
+}
+
+.route-distance-chip {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 7px !important;
+  background: #090d16 !important;
+  background-color: #090d16 !important;
+  color: #ffffff !important;
+  padding: 6px 14px !important;
+  border-radius: 9999px !important;
+  border: 2px solid #10b981 !important;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.85), 0 0 12px rgba(16, 185, 129, 0.5) !important;
+  white-space: nowrap !important;
+  transform: translate(-50%, -50%) !important;
+  user-select: none !important;
+  pointer-events: auto !important;
+  cursor: pointer !important;
+  font-family: inherit !important;
+  z-index: 1000 !important;
+  transition: transform 0.15s ease, box-shadow 0.15s ease !important;
+}
+
+.route-distance-chip:hover {
+  transform: translate(-50%, -50%) scale(1.06) !important;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.95), 0 0 16px rgba(16, 185, 129, 0.7) !important;
+}
+
+.route-leg-tooltip.leaflet-tooltip {
+  background: #0f172a !important;
+  border: 2px solid #10b981 !important;
+  border-radius: 0.75rem !important;
+  color: #ffffff !important;
+  box-shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.75) !important;
+  padding: 6px 12px !important;
+}
+
+.route-leg-tooltip.leaflet-tooltip::before {
+  border-top-color: #0f172a !important;
+  border-bottom-color: #0f172a !important;
+}
+
+/* ============================================================
+   Older OS & Legacy Browser Compatibility Fallbacks
+   (iOS 11-15, macOS Safari 11-14, Android 5-11, Older Chrome/Edge/Firefox)
+   ============================================================ */
+
+/* 1. CSS Inset fallback for older Safari & WebKit (Safari < 14.1, iOS < 14.5) */
+.inset-0 {
+  top: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+}
+.inset-x-0 {
+  left: 0 !important;
+  right: 0 !important;
+}
+.inset-y-0 {
+  top: 0 !important;
+  bottom: 0 !important;
+}
+.top-0 { top: 0 !important; }
+.bottom-0 { bottom: 0 !important; }
+.left-0 { left: 0 !important; }
+.right-0 { right: 0 !important; }
+
+/* 2. WebKit backdrop-filter & graceful opacity fallback */
+[class*="backdrop-blur"] {
+  -webkit-backdrop-filter: blur(8px);
+}
+@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .bg-white\/90, .bg-white\/80, .bg-white\/85, .bg-white\/75, .bg-white\/95 {
+    background-color: #ffffff !important;
+  }
+  .bg-slate-900\/90, .bg-slate-900\/80, .bg-slate-900\/85, .bg-slate-900\/70, .bg-slate-900\/40 {
+    background-color: rgba(15, 23, 42, 0.96) !important;
+  }
+  .bg-slate-800\/90, .bg-slate-800\/80, .bg-slate-800\/95 {
+    background-color: rgba(30, 41, 59, 0.98) !important;
+  }
+}
+
+/* 3. iOS Momentum Scrolling & safe area insets */
+.overflow-y-auto,
+.overflow-x-auto,
+.overflow-auto {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 4. Safe touch tap highlights on older mobile browsers */
+button, a, input, select, textarea {
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+}
+
+/* 5. Viewport height fallbacks for older Safari and mobile browsers */
+.min-h-screen {
+  min-height: 100vh;
+  min-height: -webkit-fill-available;
+  min-height: 100dvh;
+}
+.h-screen {
+  height: 100vh;
+  height: -webkit-fill-available;
+  height: 100dvh;
+}
+.max-h-screen {
+  max-height: 100vh;
+  max-height: -webkit-fill-available;
+  max-height: 100dvh;
+}
+
+/* 6. Leaflet rendering stability on older WebKit & Android hardware */
+.leaflet-pane,
+.leaflet-tile,
+.leaflet-marker-icon,
+.leaflet-marker-shadow,
+.leaflet-tile-container {
+  -webkit-transform: translate3d(0, 0, 0);
+  transform: translate3d(0, 0, 0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+/* 7. Image rendering and drag protection */
+img {
+  max-width: 100%;
+  height: auto;
+  -webkit-user-drag: none;
+}
+
+

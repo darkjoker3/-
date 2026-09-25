@@ -1,0 +1,6 @@
+{
+  "name": "Japan Map Pin & Photo Log",
+  "description": "日本全国47都道府県対応マップ。Googleマップ共有リンクや住所からの自動ピン設置・都道府県自動抽出、複数カテゴリ選択、下道ルート比較、リスト自由管理・削除機能",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,40 @@
+{
+  "name": "日本地図ピン＆下道ナビマップ",
+  "short_name": "日本地図ナビ",
+  "description": "心霊スポットや全国の名所・気になる場所を複数ピン留めし、現在地やピン同士の下道（一般道路）での移動距離・所要時間を一括計算・比較できる日本地図Webアプリ",
+  "start_url": "/",
+  "id": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#ffffff",
+  "theme_color": "#7c3aed",
+  "categories": ["navigation", "travel", "utilities"],
+  "lang": "ja",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
