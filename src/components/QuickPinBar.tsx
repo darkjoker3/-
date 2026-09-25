@@ -52,7 +52,7 @@ export const QuickPinBar: React.FC<QuickPinBarProps> = ({
         prefecture,
         category: targetCategory,
         categories: [targetCategory],
-        rating: 5,
+        rating: 0,
         notes: '',
         googleMapsUrl: raw.startsWith('http')
           ? raw

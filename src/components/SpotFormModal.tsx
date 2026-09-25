@@ -77,7 +77,7 @@ export const SpotFormModal: React.FC<SpotFormModalProps> = ({
   const [address, setAddress] = useState('');
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
-  const [rating, setRating] = useState<number>(3.0); // 0〜5 (0.5きざみ)
+  const [rating, setRating] = useState<number>(0); // 0〜5 (0.5きざみ, 0=未評価)
   const [notes, setNotes] = useState('');
   const [photos, setPhotos] = useState<SpotPhoto[]>([]);
   const [referenceUrls, setReferenceUrls] = useState<ReferenceUrl[]>([]);
@@ -116,7 +116,7 @@ export const SpotFormModal: React.FC<SpotFormModalProps> = ({
       setRating(
         initialSpot.rating !== undefined && initialSpot.rating !== null
           ? Number(initialSpot.rating)
-          : 3.0
+          : 0
       );
       setNotes(initialSpot.notes || '');
       setPhotos(initialSpot.photos || []);
@@ -159,7 +159,7 @@ export const SpotFormModal: React.FC<SpotFormModalProps> = ({
         setAddress('');
         setLat(initialLatLng.lat);
         setLng(initialLatLng.lng);
-        setRating(5);
+        setRating(0);
         setNotes('');
         setPhotos([]);
         setReferenceUrls([]);
@@ -187,7 +187,7 @@ export const SpotFormModal: React.FC<SpotFormModalProps> = ({
           }
         });
       } else {
-        // Clean reset for brand new spot
+        // Clean reset for brand new spot (初期設定: 未評価)
         setUrlInput('');
         setTitle('');
         setSelectedCategories([categories[0]?.id || 'haunted']);
@@ -195,7 +195,7 @@ export const SpotFormModal: React.FC<SpotFormModalProps> = ({
         setAddress('');
         setLat(null);
         setLng(null);
-        setRating(5);
+        setRating(0);
         setNotes('');
         setPhotos([]);
         setReferenceUrls([]);
@@ -777,10 +777,33 @@ export const SpotFormModal: React.FC<SpotFormModalProps> = ({
           </div>
 
           {/* 5. 危険度 ★★★★☆ */}
+          {/* 5. 危険度・評価 */}
           <div className="space-y-1.5">
-            <label className="block text-xs font-bold text-slate-200">
-              危険度
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-bold text-slate-200">
+                危険度・評価
+              </label>
+              <div className="flex items-center gap-1.5">
+                <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${
+                  rating === 0
+                    ? 'text-slate-400 bg-slate-800'
+                    : 'text-amber-400 bg-amber-950/60 border border-amber-800/40'
+                }`}>
+                  {rating === 0 ? '未評価' : `★${rating.toFixed(1)}`}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setRating(0)}
+                  className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer ${
+                    rating === 0
+                      ? 'bg-slate-700 text-white border-slate-600'
+                      : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+                  }`}
+                >
+                  未評価にする
+                </button>
+              </div>
+            </div>
             <div className="flex items-center gap-1.5 py-1">
               {[1, 2, 3, 4, 5].map((star) => (
                 <button
@@ -791,16 +814,13 @@ export const SpotFormModal: React.FC<SpotFormModalProps> = ({
                 >
                   <Star
                     className={`w-6 h-6 ${
-                      star <= Math.round(rating)
+                      rating > 0 && star <= Math.round(rating)
                         ? 'fill-amber-400 text-amber-400'
                         : 'text-slate-700'
                     }`}
                   />
                 </button>
               ))}
-              <span className="text-xs font-bold text-slate-300 ml-2">
-                ★{Math.round(rating)}
-              </span>
             </div>
           </div>
 
@@ -1423,8 +1443,12 @@ export const SpotFormModal: React.FC<SpotFormModalProps> = ({
                   危険度・注目度評価 (★ 0.0〜5.0 / 0.5刻み)
                 </label>
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-black text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200 shadow-2xs">
-                    ★ {rating.toFixed(1)} / 5.0
+                  <span className={`text-xs font-bold px-2 py-0.5 rounded-full border shadow-2xs ${
+                    rating === 0
+                      ? 'text-slate-500 bg-slate-100 border-slate-200'
+                      : 'text-amber-600 bg-amber-50 border-amber-200'
+                  }`}>
+                    {rating === 0 ? '未評価' : `★ ${rating.toFixed(1)} / 5.0`}
                   </span>
                   <button
                     type="button"
@@ -1434,9 +1458,9 @@ export const SpotFormModal: React.FC<SpotFormModalProps> = ({
                         ? 'bg-slate-800 text-white border-slate-800 shadow-2xs'
                         : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
                     }`}
-                    title="評価を0にリセット"
+                    title="評価を未評価 (0) に設定"
                   >
-                    0 (未評価)
+                    未評価
                   </button>
                 </div>
               </div>

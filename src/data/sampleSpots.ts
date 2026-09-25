@@ -83,26 +83,57 @@ export const getCategoryDisplay = (
     const matchById = customCategories.find((c) => c.id === categoryId);
     if (matchById) {
       return {
+        id: matchById.id,
         label: matchById.name,
-        color: matchById.color,
-        icon: matchById.icon,
+        color: matchById.color || '#8b5cf6',
+        icon: matchById.icon || '👻',
       };
     }
     const matchByName = customCategories.find(
-      (c) => c.name.toLowerCase() === categoryId.toLowerCase()
+      (c) => c.name && c.name.toLowerCase() === categoryId.toLowerCase()
     );
     if (matchByName) {
       return {
+        id: matchByName.id,
         label: matchByName.name,
-        color: matchByName.color,
-        icon: matchByName.icon,
+        color: matchByName.color || '#8b5cf6',
+        icon: matchByName.icon || '👻',
       };
     }
   }
 
+  // localStorage救済
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const saved = window.localStorage.getItem('japan_map_custom_categories_v2');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          const match = parsed.find(
+            (c: any) =>
+              c.id === categoryId ||
+              (c.name && c.name.toLowerCase() === categoryId.toLowerCase())
+          );
+          if (match) {
+            return {
+              id: match.id,
+              label: match.name,
+              color: match.color || '#8b5cf6',
+              icon: match.icon || '👻',
+            };
+          }
+        }
+      }
+    }
+  } catch {
+    // ignore
+  }
+
   const meta = getCategoryMeta(categoryId, customCategories);
+  const cleanLabel = meta.label === 'カスタム' ? '' : meta.label;
   return {
-    label: meta.label,
+    id: meta.id,
+    label: cleanLabel,
     color: meta.color,
     icon: meta.icon,
   };

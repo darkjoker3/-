@@ -191,7 +191,8 @@ export const MobileSpotListView: React.FC<MobileSpotListViewProps> = ({
       <div className="flex items-center gap-1.5 px-3 py-2 border-b border-slate-850 overflow-x-auto no-scrollbar scroll-smooth flex-shrink-0 bg-slate-950">
         {categories.map((cat) => {
           const isSelected = selectedCatIds.includes(cat.id);
-          const config = CATEGORY_CONFIG[cat.id] || { color: cat.color || '#E53935' };
+          const meta = getCategoryMeta(cat.id, categories);
+          const catColor = cat.color || meta.color || '#E53935';
           return (
             <button
               key={cat.id}
@@ -202,8 +203,8 @@ export const MobileSpotListView: React.FC<MobileSpotListViewProps> = ({
                 );
               }}
               style={{
-                backgroundColor: isSelected ? config.color : undefined,
-                borderColor: isSelected ? config.color : undefined,
+                backgroundColor: isSelected ? catColor : undefined,
+                borderColor: isSelected ? catColor : undefined,
               }}
               className={`flex-shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
                 isSelected
@@ -211,7 +212,7 @@ export const MobileSpotListView: React.FC<MobileSpotListViewProps> = ({
                   : 'bg-slate-900 text-slate-300 border-slate-800 hover:border-slate-700'
               }`}
             >
-              <span>{cat.name}</span>
+              <span>{cat.name || meta.label}</span>
             </button>
           );
         })}
@@ -244,10 +245,12 @@ export const MobileSpotListView: React.FC<MobileSpotListViewProps> = ({
           </div>
         ) : (
           filteredSpots.map((spot) => {
-            const allCats = getSpotAllCategories(spot);
-            const mainCat = getSpotMainCategory(spot);
-            const coverPhoto = spot.photos.find((p) => p.isCover) || spot.photos[0];
-            const danger = Math.round(spot.dangerLevel ?? spot.rating ?? 4);
+            const allCats = getSpotAllCategories(spot, categories);
+            const mainCat = getSpotMainCategory(spot, categories);
+            const photos = spot.photos || [];
+            const coverPhoto = photos.find((p) => p.isCover) || photos[0];
+            const hasCoverPhoto = Boolean(coverPhoto && coverPhoto.url && coverPhoto.url.trim() !== '');
+            const danger = Math.round(spot.dangerLevel ?? spot.rating ?? 0);
 
             let distanceKm: number | null = null;
             if (routesInfo[spot.id]?.status === 'success') {
@@ -266,7 +269,7 @@ export const MobileSpotListView: React.FC<MobileSpotListViewProps> = ({
                 className="bg-slate-900/90 hover:bg-slate-850 active:bg-slate-800 border border-slate-800 rounded-2xl p-2.5 flex items-center gap-3 transition-colors cursor-pointer shadow-sm group"
               >
                 {/* Photo Thumbnail */}
-                {coverPhoto ? (
+                {hasCoverPhoto ? (
                   <div className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 bg-slate-800 border border-slate-700">
                     <img
                       src={coverPhoto.url}
@@ -276,8 +279,13 @@ export const MobileSpotListView: React.FC<MobileSpotListViewProps> = ({
                     />
                   </div>
                 ) : (
-                  <div className="w-16 h-16 rounded-xl flex-shrink-0 bg-slate-800 border border-slate-700 flex items-center justify-center text-2xl">
-                    {mainCat.icon}
+                  <div
+                    className="w-16 h-16 rounded-xl flex-shrink-0 border border-slate-700/80 flex items-center justify-center text-3xl select-none"
+                    style={{
+                      backgroundColor: mainCat.color ? `${mainCat.color}25` : '#1e293b',
+                    }}
+                  >
+                    <span className="drop-shadow-2xs leading-none">{mainCat.icon || '👻'}</span>
                   </div>
                 )}
 
@@ -290,29 +298,38 @@ export const MobileSpotListView: React.FC<MobileSpotListViewProps> = ({
                     {spot.prefecture || ''} {spot.city || spot.address || ''}
                   </div>
 
-                  {/* Stars */}
-                  <div className="flex items-center text-amber-400 mt-1">
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <Star
-                        key={star}
-                        className={`w-3 h-3 ${
-                          star <= danger ? 'fill-amber-400 text-amber-400' : 'text-slate-700'
-                        }`}
-                      />
-                    ))}
-                  </div>
+                  {/* Stars / 未評価 */}
+                  {danger > 0 ? (
+                    <div className="flex items-center text-amber-400 mt-1">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <Star
+                          key={star}
+                          className={`w-3 h-3 ${
+                            star <= danger ? 'fill-amber-400 text-amber-400' : 'text-slate-700'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-[10px] text-slate-500 font-medium mt-1">
+                      未評価
+                    </div>
+                  )}
 
                   {/* Badges */}
                   <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                    {allCats.slice(0, 2).map((cat) => (
-                      <span
-                        key={cat.id}
-                        className="px-2 py-0.5 rounded-md text-[10px] font-bold text-white shadow-2xs"
-                        style={{ backgroundColor: cat.color }}
-                      >
-                        {cat.label}
-                      </span>
-                    ))}
+                    {allCats
+                      .filter((cat) => cat && cat.label && cat.label !== 'カスタム' && cat.id !== 'custom')
+                      .slice(0, 2)
+                      .map((cat) => (
+                        <span
+                          key={cat.id}
+                          className="px-2 py-0.5 rounded-md text-[10px] font-bold text-white shadow-2xs"
+                          style={{ backgroundColor: cat.color }}
+                        >
+                          {cat.label}
+                        </span>
+                      ))}
                     {spot.isVisited && (
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-600 text-white">
                         訪問済み

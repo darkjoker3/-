@@ -109,7 +109,8 @@ export interface PrefectureStats {
 
 export function computePrefectureStats(
   spots: Spot[],
-  targetPrefecture?: string
+  targetPrefecture?: string,
+  customCategories?: Array<{ id: string; name: string; color: string; icon: string }>
 ): PrefectureStats {
   const filtered = targetPrefecture && targetPrefecture !== 'all'
     ? spots.filter((s) => s.prefecture === targetPrefecture)
@@ -122,12 +123,17 @@ export function computePrefectureStats(
   for (const cat of Object.keys(CATEGORY_CONFIG)) {
     categoryCounts[cat] = 0;
   }
+  if (Array.isArray(customCategories)) {
+    for (const c of customCategories) {
+      categoryCounts[c.id] = 0;
+    }
+  }
 
   for (const s of filtered) {
     if (s.isVisited) {
       visited++;
     }
-    const mainCat = getSpotMainCategory(s);
+    const mainCat = getSpotMainCategory(s, customCategories);
     categoryCounts[mainCat.id] = (categoryCounts[mainCat.id] || 0) + 1;
   }
 

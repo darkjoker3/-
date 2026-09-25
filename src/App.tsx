@@ -18,6 +18,7 @@ import { MobileSpotBottomSheet } from './components/MobileSpotBottomSheet';
 import { PrefectureInfoCard } from './components/PrefectureInfoCard';
 import { FilterSearchModal } from './components/FilterSearchModal';
 import { MobileSpotListView } from './components/MobileSpotListView';
+import { DataExportImportModal } from './components/DataExportImportModal';
 import { fetchLocalRoadRoute } from './utils/routeUtils';
 import {
   MapPin,
@@ -39,8 +40,34 @@ import {
   Car,
   Smartphone,
   Map as MapIcon,
-  ListFilter
+  ListFilter,
+  Cloud,
 } from 'lucide-react';
+import { User } from 'firebase/auth';
+import {
+  initAuth,
+  googleSignIn,
+  googleSignOut,
+  getAccessToken,
+} from './services/firebaseAuth';
+import {
+  searchSyncFile,
+  downloadSyncData,
+  uploadSyncData,
+  deleteSyncFile,
+  CloudSyncData,
+  DriveFileMeta,
+  SYNC_FILE_NAME,
+} from './services/googleDriveService';
+import {
+  smartMergeSyncData,
+  createSyncPayload,
+  getDeviceId,
+  LAST_SYNC_KEY,
+  SYNC_FILE_ID_KEY,
+  AUTO_SYNC_ENABLED_KEY,
+} from './utils/cloudSyncManager';
+import { CloudSyncModal } from './components/CloudSyncModal';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -199,6 +226,37 @@ export default function App() {
   const [editingSpot, setEditingSpot] = useState<Spot | null>(null);
   const [pendingLatLng, setPendingLatLng] = useState<{ lat: number; lng: number } | null>(null);
   const [showResetSamplesConfirm, setShowResetSamplesConfirm] = useState(false);
+  const [isDataModalOpen, setIsDataModalOpen] = useState(false);
+
+  // Cloud Sync (Google Drive) states
+  const [isCloudSyncModalOpen, setIsCloudSyncModalOpen] = useState(false);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState<number | null>(() => {
+    try {
+      const v = localStorage.getItem(LAST_SYNC_KEY);
+      return v ? parseInt(v, 10) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [syncFileId, setSyncFileId] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem(SYNC_FILE_ID_KEY) || null;
+    } catch {
+      return null;
+    }
+  });
+  const [cloudMeta, setCloudMeta] = useState<DriveFileMeta | null>(null);
+  const [cloudData, setCloudData] = useState<CloudSyncData | null>(null);
+  const [autoSyncEnabled, setAutoSyncEnabled] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(AUTO_SYNC_ENABLED_KEY) !== 'false';
+    } catch {
+      return true;
+    }
+  });
+  const [hasPendingChanges, setHasPendingChanges] = useState<boolean>(false);
 
   // Screen & Device Breakpoint Detection (PC: >=1025px, Tablet: 769-1024px, Mobile: <=768px)
   const [windowWidth, setWindowWidth] = useState(() =>
@@ -373,6 +431,379 @@ export default function App() {
       console.error('Failed to save custom lists to localStorage:', e);
     }
   }, [customLists]);
+
+  // --- Google Drive Cloud Sync Integration ---
+  // Initialize Auth state listener
+  useEffect(() => {
+    const unsubscribe = initAuth(
+      async (user, token) => {
+        setCurrentUser(user);
+        try {
+          const fileMeta = await searchSyncFile(token);
+          if (fileMeta) {
+            setCloudMeta(fileMeta);
+            setSyncFileId(fileMeta.id);
+            localStorage.setItem(SYNC_FILE_ID_KEY, fileMeta.id);
+            const downloaded = await downloadSyncData(token, fileMeta.id);
+            setCloudData(downloaded);
+          }
+        } catch (e) {
+          console.warn('Initial cloud sync check:', e);
+        }
+      },
+      () => {
+        setCurrentUser(null);
+      }
+    );
+    return () => unsubscribe();
+  }, []);
+
+  // Google Sign In handler
+  const handleSignIn = async () => {
+    try {
+      const { user, accessToken } = await googleSignIn();
+      setCurrentUser(user);
+      showToast(`Googleアカウント（${user.displayName || user.email}）に接続しました`, 'success');
+
+      setIsSyncing(true);
+      try {
+        const fileMeta = await searchSyncFile(accessToken);
+        if (fileMeta) {
+          setCloudMeta(fileMeta);
+          setSyncFileId(fileMeta.id);
+          localStorage.setItem(SYNC_FILE_ID_KEY, fileMeta.id);
+          const remoteData = await downloadSyncData(accessToken, fileMeta.id);
+          setCloudData(remoteData);
+
+          // Smart merge on sign-in
+          const { mergedSpots, mergedCategories, mergedCustomLists, addedSpotsCount, updatedSpotsCount } = smartMergeSyncData(
+            { spots, categories, customLists },
+            remoteData
+          );
+          setSpots(mergedSpots);
+          setCategories(mergedCategories);
+          setCustomLists(mergedCustomLists);
+
+          const now = Date.now();
+          setLastSyncTime(now);
+          localStorage.setItem(LAST_SYNC_KEY, String(now));
+          setHasPendingChanges(false);
+
+          // Upload merged state back to Drive
+          const payload = createSyncPayload(mergedSpots, mergedCategories, mergedCustomLists, {
+            uiScale,
+            isLocationEnabled,
+          });
+          const uploaded = await uploadSyncData(accessToken, payload, fileMeta.id);
+          setCloudMeta({ ...fileMeta, modifiedTime: uploaded.modifiedTime });
+
+          showToast(`Google Driveと同期しました（追加:${addedSpotsCount}件, 更新:${updatedSpotsCount}件）`, 'success');
+        } else {
+          // Create initial sync file on Drive
+          const payload = createSyncPayload(spots, categories, customLists, {
+            uiScale,
+            isLocationEnabled,
+          });
+          const uploaded = await uploadSyncData(accessToken, payload);
+          setSyncFileId(uploaded.fileId);
+          localStorage.setItem(SYNC_FILE_ID_KEY, uploaded.fileId);
+          setCloudMeta({ id: uploaded.fileId, name: SYNC_FILE_NAME, modifiedTime: uploaded.modifiedTime });
+          setCloudData(payload);
+
+          const now = Date.now();
+          setLastSyncTime(now);
+          localStorage.setItem(LAST_SYNC_KEY, String(now));
+          setHasPendingChanges(false);
+
+          showToast('Google Driveに初期同期データを作成・保存しました', 'success');
+        }
+      } finally {
+        setIsSyncing(false);
+      }
+    } catch (err: unknown) {
+      console.error('Google Sign In failed:', err);
+      const msg = err instanceof Error ? err.message : 'Googleログインに失敗しました';
+      showToast(msg, 'error');
+      throw err;
+    }
+  };
+
+  // Google Sign Out handler
+  const handleSignOut = async () => {
+    try {
+      await googleSignOut();
+      setCurrentUser(null);
+      showToast('Googleアカウントからログアウトしました', 'info');
+    } catch (err: unknown) {
+      console.error('Google Sign Out failed:', err);
+      showToast('ログアウトに失敗しました', 'error');
+    }
+  };
+
+  // Toggle Auto-sync handler
+  const handleToggleAutoSync = (enabled: boolean) => {
+    setAutoSyncEnabled(enabled);
+    localStorage.setItem(AUTO_SYNC_ENABLED_KEY, String(enabled));
+    showToast(enabled ? 'Google Drive自動同期を有効にしました' : 'Google Drive自動同期を一時停止しました', 'info');
+  };
+
+  // Manual Sync (Smart Merge)
+  const handleManualSync = async () => {
+    let token = getAccessToken();
+    if (!token) {
+      const result = await googleSignIn();
+      token = result.accessToken;
+      setCurrentUser(result.user);
+    }
+
+    setIsSyncing(true);
+    try {
+      const fileMeta = await searchSyncFile(token);
+      if (fileMeta) {
+        setCloudMeta(fileMeta);
+        setSyncFileId(fileMeta.id);
+        localStorage.setItem(SYNC_FILE_ID_KEY, fileMeta.id);
+        const remoteData = await downloadSyncData(token, fileMeta.id);
+        setCloudData(remoteData);
+
+        const { mergedSpots, mergedCategories, mergedCustomLists } = smartMergeSyncData(
+          { spots, categories, customLists },
+          remoteData
+        );
+        setSpots(mergedSpots);
+        setCategories(mergedCategories);
+        setCustomLists(mergedCustomLists);
+
+        const payload = createSyncPayload(mergedSpots, mergedCategories, mergedCustomLists, {
+          uiScale,
+          isLocationEnabled,
+        });
+        const updated = await uploadSyncData(token, payload, fileMeta.id);
+        setCloudMeta({ ...fileMeta, modifiedTime: updated.modifiedTime });
+        setCloudData(payload);
+
+        const now = Date.now();
+        setLastSyncTime(now);
+        localStorage.setItem(LAST_SYNC_KEY, String(now));
+        setHasPendingChanges(false);
+
+        showToast(`同期完了: ${mergedSpots.length}件のスポットを最新状態に統合しました`, 'success');
+      } else {
+        const payload = createSyncPayload(spots, categories, customLists, {
+          uiScale,
+          isLocationEnabled,
+        });
+        const created = await uploadSyncData(token, payload);
+        setSyncFileId(created.fileId);
+        localStorage.setItem(SYNC_FILE_ID_KEY, created.fileId);
+        setCloudMeta({ id: created.fileId, name: SYNC_FILE_NAME, modifiedTime: created.modifiedTime });
+        setCloudData(payload);
+
+        const now = Date.now();
+        setLastSyncTime(now);
+        localStorage.setItem(LAST_SYNC_KEY, String(now));
+        setHasPendingChanges(false);
+
+        showToast('Google Driveにデータを保存しました', 'success');
+      }
+    } catch (err: unknown) {
+      console.error('Manual sync failed:', err);
+      const msg = err instanceof Error ? err.message : '同期に失敗しました';
+      showToast(msg, 'error');
+      throw err;
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // Restore from Cloud (Pull)
+  const handleRestoreFromCloud = async () => {
+    let token = getAccessToken();
+    if (!token) {
+      const result = await googleSignIn();
+      token = result.accessToken;
+      setCurrentUser(result.user);
+    }
+    setIsSyncing(true);
+    try {
+      const fileMeta = cloudMeta || (await searchSyncFile(token));
+      if (!fileMeta) {
+        throw new Error('Google Drive上に同期データが見つかりません');
+      }
+      const remoteData = await downloadSyncData(token, fileMeta.id);
+      setSpots(deduplicateSpots(remoteData.spots || []));
+      if (remoteData.categories && remoteData.categories.length > 0) {
+        setCategories(deduplicateCategories(remoteData.categories));
+      }
+      if (remoteData.customLists) {
+        setCustomLists(deduplicateCustomLists(remoteData.customLists));
+      }
+      setCloudData(remoteData);
+      const now = Date.now();
+      setLastSyncTime(now);
+      localStorage.setItem(LAST_SYNC_KEY, String(now));
+      setHasPendingChanges(false);
+      showToast(`クラウドから復元完了: ${remoteData.spots?.length ?? 0}件のスポットを復元しました`, 'success');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : '復元に失敗しました';
+      showToast(msg, 'error');
+      throw err;
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // Force Overwrite Cloud (Push)
+  const handleForceOverwriteCloud = async () => {
+    let token = getAccessToken();
+    if (!token) {
+      const result = await googleSignIn();
+      token = result.accessToken;
+      setCurrentUser(result.user);
+    }
+    setIsSyncing(true);
+    try {
+      const payload = createSyncPayload(spots, categories, customLists, {
+        uiScale,
+        isLocationEnabled,
+      });
+      const uploaded = await uploadSyncData(token, payload, syncFileId || undefined);
+      setSyncFileId(uploaded.fileId);
+      localStorage.setItem(SYNC_FILE_ID_KEY, uploaded.fileId);
+      setCloudMeta({
+        id: uploaded.fileId,
+        name: SYNC_FILE_NAME,
+        modifiedTime: uploaded.modifiedTime,
+      });
+      setCloudData(payload);
+      const now = Date.now();
+      setLastSyncTime(now);
+      localStorage.setItem(LAST_SYNC_KEY, String(now));
+      setHasPendingChanges(false);
+      showToast(`Google Driveへ現在の端末データ（${spots.length}件）を上書き保存しました`, 'success');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : '上書き保存に失敗しました';
+      showToast(msg, 'error');
+      throw err;
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // Delete Cloud File
+  const handleDeleteCloudFile = async () => {
+    const token = getAccessToken();
+    if (!token || !syncFileId) {
+      throw new Error('同期ファイルが見つかりません');
+    }
+    setIsSyncing(true);
+    try {
+      await deleteSyncFile(token, syncFileId);
+      setSyncFileId(null);
+      localStorage.removeItem(SYNC_FILE_ID_KEY);
+      setCloudMeta(null);
+      setCloudData(null);
+      showToast('Google Driveの同期ファイルを削除しました', 'info');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'クラウドファイルの削除に失敗しました';
+      showToast(msg, 'error');
+      throw err;
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // Debounced Auto-sync on data change
+  const isInitialMount = useRef(true);
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    setHasPendingChanges(true);
+
+    if (!currentUser || !autoSyncEnabled) return;
+
+    const token = getAccessToken();
+    if (!token) return;
+
+    const timer = setTimeout(async () => {
+      try {
+        setIsSyncing(true);
+        const payload = createSyncPayload(spots, categories, customLists, {
+          uiScale,
+          isLocationEnabled,
+        });
+        const res = await uploadSyncData(token, payload, syncFileId || undefined);
+        if (!syncFileId) {
+          setSyncFileId(res.fileId);
+          localStorage.setItem(SYNC_FILE_ID_KEY, res.fileId);
+        }
+        setCloudMeta((prev) => (prev ? { ...prev, modifiedTime: res.modifiedTime } : { id: res.fileId, name: SYNC_FILE_NAME, modifiedTime: res.modifiedTime }));
+        setCloudData(payload);
+        const now = Date.now();
+        setLastSyncTime(now);
+        localStorage.setItem(LAST_SYNC_KEY, String(now));
+        setHasPendingChanges(false);
+      } catch (err) {
+        console.warn('Auto sync save error:', err);
+      } finally {
+        setIsSyncing(false);
+      }
+    }, 2500);
+
+    return () => clearTimeout(timer);
+  }, [spots, categories, customLists, currentUser, autoSyncEnabled, syncFileId, uiScale, isLocationEnabled]);
+
+  // Periodic and window-focus multi-device sync
+  useEffect(() => {
+    if (!currentUser || !autoSyncEnabled) return;
+
+    const checkRemoteUpdate = async () => {
+      const token = getAccessToken();
+      if (!token) return;
+
+      try {
+        const fileMeta = await searchSyncFile(token);
+        if (!fileMeta) return;
+
+        const remoteTime = new Date(fileMeta.modifiedTime).getTime();
+        if (lastSyncTime && remoteTime > lastSyncTime + 8000) {
+          const downloaded = await downloadSyncData(token, fileMeta.id);
+          if (downloaded.updatedByDevice !== getDeviceId()) {
+            const { mergedSpots, mergedCategories, mergedCustomLists } = smartMergeSyncData(
+              { spots, categories, customLists },
+              downloaded
+            );
+            setSpots(mergedSpots);
+            setCategories(mergedCategories);
+            setCustomLists(mergedCustomLists);
+            setCloudData(downloaded);
+            setCloudMeta(fileMeta);
+            setLastSyncTime(Date.now());
+            localStorage.setItem(LAST_SYNC_KEY, String(Date.now()));
+            showToast(`別の端末（${downloaded.updatedByDevice}）の最新データと自動同期しました`, 'info');
+          }
+        }
+      } catch (e) {
+        // Silently catch background poll error
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        checkRemoteUpdate();
+      }
+    };
+
+    window.addEventListener('visibilitychange', handleVisibilityChange);
+    const interval = setInterval(checkRemoteUpdate, 45000);
+
+    return () => {
+      window.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(interval);
+    };
+  }, [currentUser, autoSyncEnabled, lastSyncTime, spots, categories, customLists]);
 
   // Request Current Location (Geolocation)
   const handleRequestUserLocation = useCallback(() => {
@@ -1073,6 +1504,9 @@ export default function App() {
             onOpenCategoryManager={() => setIsCategoryModalOpen(true)}
             onOpenListSettings={() => setIsListSettingsModalOpen(true)}
             categories={categories}
+            onOpenCloudSync={() => setIsCloudSyncModalOpen(true)}
+            isCloudSyncActive={!!currentUser}
+            onOpenDataModal={() => setIsDataModalOpen(true)}
           />
 
           {/* 4. 地図 (全画面大画面表示) または「一覧」選択時のリスト表示 (Screen 6 準拠) */}
@@ -1319,6 +1753,50 @@ export default function App() {
                   <span>Webアプリ化</span>
                 </button>
 
+                {/* Google Drive Cloud Sync Modal Trigger */}
+                <button
+                  id="header-cloud-sync-btn"
+                  onClick={() => setIsCloudSyncModalOpen(true)}
+                  className={`px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-2xs transition-all ${
+                    currentUser
+                      ? isSyncing
+                        ? 'bg-blue-50 text-blue-700 border-blue-200'
+                        : hasPendingChanges
+                        ? 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
+                        : 'bg-emerald-50/90 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
+                      : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
+                  }`}
+                  title="Google Driveクラウド同期（自動保存・他端末と同期）"
+                >
+                  <Cloud
+                    className={`w-3.5 h-3.5 ${
+                      currentUser
+                        ? isSyncing
+                          ? 'animate-spin text-blue-600'
+                          : hasPendingChanges
+                          ? 'text-amber-600'
+                          : 'text-emerald-600'
+                        : 'text-slate-500'
+                    }`}
+                  />
+                  <span className="hidden sm:inline">
+                    {currentUser
+                      ? isSyncing
+                        ? '同期中...'
+                        : hasPendingChanges
+                        ? '未同期あり'
+                        : 'Drive同期中'
+                      : 'Drive同期'}
+                  </span>
+                  {currentUser && !isSyncing && (
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        hasPendingChanges ? 'bg-amber-500' : 'bg-emerald-500'
+                      }`}
+                    ></span>
+                  )}
+                </button>
+
                 {/* Geolocation ON/OFF Toggle */}
                 <button
                   id="header-location-btn"
@@ -1491,6 +1969,7 @@ export default function App() {
                         onResetSamples={handleResetSamples}
                         onExportData={handleExportData}
                         onImportData={handleImportData}
+                        onOpenDataModal={() => setIsDataModalOpen(true)}
                         isBottomLayout={false}
                         selectedPrefecture={selectedPrefecture}
                         onSelectPrefecture={handleSelectPrefecture}
@@ -1518,6 +1997,8 @@ export default function App() {
                         onReorderCustomLists={handleReorderCustomLists}
                         onEditSpot={handleOpenEditSpot}
                         onDeleteSpot={handleDeleteSpot}
+                        onOpenCloudSync={() => setIsCloudSyncModalOpen(true)}
+                        isCloudSyncActive={!!currentUser}
                       />
                     </div>
                   </aside>
@@ -1613,6 +2094,7 @@ export default function App() {
                       onResetSamples={handleResetSamples}
                       onExportData={handleExportData}
                       onImportData={handleImportData}
+                      onOpenDataModal={() => setIsDataModalOpen(true)}
                       isBottomLayout={true}
                       selectedPrefecture={selectedPrefecture}
                       onSelectPrefecture={handleSelectPrefecture}
@@ -1636,6 +2118,8 @@ export default function App() {
                       onReorderCustomLists={handleReorderCustomLists}
                       onEditSpot={handleOpenEditSpot}
                       onDeleteSpot={handleDeleteSpot}
+                      onOpenCloudSync={() => setIsCloudSyncModalOpen(true)}
+                      isCloudSyncActive={!!currentUser}
                     />
                   </section>
                 </div>
@@ -1757,6 +2241,29 @@ export default function App() {
         }}
       />
 
+      {/* Google Drive Cloud Sync Modal */}
+      <CloudSyncModal
+        isOpen={isCloudSyncModalOpen}
+        onClose={() => setIsCloudSyncModalOpen(false)}
+        currentUser={currentUser}
+        onSignIn={handleSignIn}
+        onSignOut={handleSignOut}
+        isSyncing={isSyncing}
+        lastSyncTime={lastSyncTime}
+        cloudMeta={cloudMeta}
+        cloudData={cloudData}
+        spots={spots}
+        categories={categories}
+        customLists={customLists}
+        autoSyncEnabled={autoSyncEnabled}
+        onToggleAutoSync={handleToggleAutoSync}
+        onManualSync={handleManualSync}
+        onRestoreFromCloud={handleRestoreFromCloud}
+        onForceOverwriteCloud={handleForceOverwriteCloud}
+        onDeleteCloudFile={handleDeleteCloudFile}
+        hasPendingChanges={hasPendingChanges}
+      />
+
       {/* Reset Samples Confirmation Modal */}
       {showResetSamplesConfirm && (
         <ConfirmDeleteModal
@@ -1777,6 +2284,24 @@ export default function App() {
           onCancel={() => setShowResetSamplesConfirm(false)}
         />
       )}
+
+      {/* Data Export / Import Modal (CSV & JSON) */}
+      <DataExportImportModal
+        isOpen={isDataModalOpen}
+        onClose={() => setIsDataModalOpen(false)}
+        spots={spots}
+        filteredSpots={filteredSpotsForMobile}
+        categories={categories}
+        customLists={customLists}
+        onSaveSpots={(newSpots) => {
+          setSpots(deduplicateSpots(newSpots));
+          setSelectedSpotId(null);
+          setSelectedSpotIds([]);
+        }}
+        onExportJson={handleExportData}
+        onImportJson={handleImportData}
+        showToast={showToast}
+      />
 
       {/* Notification Toast */}
       {toast && (

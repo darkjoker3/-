@@ -156,21 +156,48 @@ export function getCategoryMeta(
       return {
         id: foundById.id,
         label: foundById.name,
-        color: foundById.color,
-        icon: foundById.icon,
+        color: foundById.color || '#8b5cf6',
+        icon: foundById.icon || '👻',
       };
     }
     const foundByName = customCategories.find(
-      (c) => c.name.toLowerCase() === categoryIdOrName.toLowerCase()
+      (c) => c.name && c.name.toLowerCase() === categoryIdOrName.toLowerCase()
     );
     if (foundByName) {
       return {
         id: foundByName.id,
         label: foundByName.name,
-        color: foundByName.color,
-        icon: foundByName.icon,
+        color: foundByName.color || '#8b5cf6',
+        icon: foundByName.icon || '👻',
       };
     }
+  }
+
+  // 1-b. localStorageに保存されたカスタムカテゴリからも安全に照合（未伝播時の救済）
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const saved = window.localStorage.getItem('japan_map_custom_categories_v2');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          const match = parsed.find(
+            (c: any) =>
+              c.id === categoryIdOrName ||
+              (c.name && c.name.toLowerCase() === categoryIdOrName.toLowerCase())
+          );
+          if (match) {
+            return {
+              id: match.id,
+              label: match.name,
+              color: match.color || '#8b5cf6',
+              icon: match.icon || '👻',
+            };
+          }
+        }
+      }
+    }
+  } catch {
+    // ignore
   }
 
   // 2. 直接ID一致
@@ -203,12 +230,17 @@ export function getCategoryMeta(
     }
   }
 
-  // 7. カテゴリ名が「その他」で上書きされないよう、名称そのものを表示保持
+  // 7. カテゴリ名が「その他」で上書きされないよう、名称そのものを表示保持（'カスタム'は表示しない）
+  const cleanLabel =
+    categoryIdOrName.startsWith('custom_') || categoryIdOrName === 'custom'
+      ? ''
+      : categoryIdOrName;
+
   return {
     id: categoryIdOrName,
-    label: categoryIdOrName.startsWith('custom_') ? 'カスタム' : categoryIdOrName,
+    label: cleanLabel,
     color: '#8b5cf6',
-    icon: '🏷️',
+    icon: '👻',
     description: '登録カテゴリ',
   };
 }
@@ -253,6 +285,7 @@ export function getSpotAllCategories(
   const add = (idOrName?: string) => {
     if (!idOrName) return;
     const meta = getCategoryMeta(idOrName, customCategories);
+    if (!meta || !meta.label || meta.label === 'カスタム' || meta.id === 'custom') return;
     if (!seenIds.has(meta.id)) {
       seenIds.add(meta.id);
       result.push(meta);

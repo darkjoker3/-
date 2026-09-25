@@ -9,6 +9,8 @@ import {
   Check,
   ListOrdered,
   Settings2,
+  Cloud,
+  FileSpreadsheet,
 } from 'lucide-react';
 
 export type BasicFilterType = 'all' | 'unvisited' | 'visited' | 'rating4' | 'popular';
@@ -28,6 +30,9 @@ interface MobileFilterBarProps {
   onOpenCategoryManager?: () => void;
   onOpenListSettings?: () => void;
   categories?: CustomCategory[];
+  onOpenCloudSync?: () => void;
+  isCloudSyncActive?: boolean;
+  onOpenDataModal?: () => void;
 }
 
 export const MobileFilterBar: React.FC<MobileFilterBarProps> = ({
@@ -45,6 +50,9 @@ export const MobileFilterBar: React.FC<MobileFilterBarProps> = ({
   onOpenCategoryManager,
   onOpenListSettings,
   categories,
+  onOpenCloudSync,
+  isCloudSyncActive,
+  onOpenDataModal,
 }) => {
   const isAllCategories = selectedCategoryIds.length === 0;
 
@@ -153,12 +161,43 @@ export const MobileFilterBar: React.FC<MobileFilterBarProps> = ({
           {sortOrder === 'asc' ? '昇順' : '降順'}
         </button>
 
+        {/* Google Drive 同期ボタン */}
+        {onOpenCloudSync && (
+          <button
+            type="button"
+            onClick={onOpenCloudSync}
+            className={`flex-shrink-0 p-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer ml-auto flex items-center gap-1 ${
+              isCloudSyncActive
+                ? 'bg-emerald-950/80 text-emerald-400 border-emerald-700/80 shadow-2xs'
+                : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+            }`}
+            title="Google Driveクラウド同期（自動保存・他端末連携）"
+          >
+            <Cloud className="w-4 h-4" />
+            {isCloudSyncActive && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>}
+          </button>
+        )}
+
+        {/* 📊 CSV / データ管理モーダル */}
+        {onOpenDataModal && (
+          <button
+            type="button"
+            onClick={onOpenDataModal}
+            className="flex-shrink-0 p-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer bg-slate-900 text-violet-400 border-slate-800 hover:text-white hover:border-slate-700"
+            title="CSV入出力・バックアップ管理"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+          </button>
+        )}
+
         {/* 🎛️ 詳細フィルターモーダルを開くボタン */}
         {onOpenFilterModal && (
           <button
             type="button"
             onClick={onOpenFilterModal}
-            className="flex-shrink-0 p-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer bg-slate-900 text-slate-300 border-slate-800 hover:text-white hover:border-slate-700 ml-auto"
+            className={`flex-shrink-0 p-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer bg-slate-900 text-slate-300 border-slate-800 hover:text-white hover:border-slate-700 ${
+              !onOpenCloudSync && !onOpenDataModal ? 'ml-auto' : ''
+            }`}
             title="詳細検索・フィルターモーダルを開く"
           >
             <SlidersHorizontal className="w-4 h-4" />

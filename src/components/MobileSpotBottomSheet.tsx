@@ -46,8 +46,10 @@ export const MobileSpotBottomSheet: React.FC<MobileSpotBottomSheetProps> = ({
 
   const allCategories = getSpotAllCategories(spot, categories);
   const mainCat = getSpotMainCategory(spot, categories);
-  const coverPhoto = spot.photos.find((p) => p.isCover) || spot.photos[0];
-  const danger = Math.round(spot.dangerLevel ?? spot.rating ?? 4);
+  const photos = spot.photos || [];
+  const coverPhoto = photos.find((p) => p.isCover) || photos[0];
+  const hasCoverPhoto = Boolean(coverPhoto && coverPhoto.url && coverPhoto.url.trim() !== '');
+  const danger = Math.round(spot.dangerLevel ?? spot.rating ?? 0);
 
   // 現在地からの距離
   let distanceKm: number | null = null;
@@ -123,7 +125,7 @@ export const MobileSpotBottomSheet: React.FC<MobileSpotBottomSheetProps> = ({
         {/* Top Info Row */}
         <div className="flex items-start gap-3">
           {/* Thumbnail: 確実に80x80pxの正方形枠に収め、縦長・高解像度写真でもカードが突き破られないよう厳格化 */}
-          {coverPhoto ? (
+          {hasCoverPhoto ? (
             <div
               onClick={() => onOpenDetail(spot.id)}
               className="w-20 h-20 min-w-[80px] min-h-[80px] max-w-[80px] max-h-[80px] rounded-xl overflow-hidden flex-shrink-0 bg-slate-900 border border-slate-800 relative cursor-pointer group shadow-xs"
@@ -135,19 +137,27 @@ export const MobileSpotBottomSheet: React.FC<MobileSpotBottomSheetProps> = ({
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                 loading="lazy"
               />
-              {spot.photos.length > 1 && (
+              {photos.length > 1 && (
                 <span className="absolute bottom-1 right-1 bg-black/80 text-white text-[9px] font-bold px-1.5 py-0.5 rounded backdrop-blur-xs">
-                  +{spot.photos.length}
+                  +{photos.length}
                 </span>
               )}
             </div>
           ) : (
             <div
               onClick={() => onOpenDetail(spot.id)}
-              className="w-20 h-20 min-w-[80px] min-h-[80px] max-w-[80px] max-h-[80px] rounded-xl flex-shrink-0 bg-slate-900 border border-slate-800 flex flex-col items-center justify-center cursor-pointer shadow-xs"
-              style={{ width: '80px', height: '80px', minWidth: '80px', minHeight: '80px', maxWidth: '80px', maxHeight: '80px' }}
+              className="w-20 h-20 min-w-[80px] min-h-[80px] max-w-[80px] max-h-[80px] rounded-xl flex-shrink-0 border border-slate-800 flex flex-col items-center justify-center cursor-pointer shadow-xs select-none"
+              style={{
+                width: '80px',
+                height: '80px',
+                minWidth: '80px',
+                minHeight: '80px',
+                maxWidth: '80px',
+                maxHeight: '80px',
+                backgroundColor: mainCat.color ? `${mainCat.color}25` : '#0f172a',
+              }}
             >
-              <span className="text-2xl">{mainCat.icon}</span>
+              <span className="text-3xl drop-shadow-2xs leading-none">{mainCat.icon || '👻'}</span>
             </div>
           )}
 
@@ -168,16 +178,20 @@ export const MobileSpotBottomSheet: React.FC<MobileSpotBottomSheetProps> = ({
 
             {/* Stars & Visit Status (★★★★☆ + 訪問済み) */}
             <div className="flex items-center gap-2 mt-1.5">
-              <div className="flex items-center text-amber-400">
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <Star
-                    key={star}
-                    className={`w-3.5 h-3.5 ${
-                      star <= danger ? 'fill-amber-400 text-amber-400' : 'text-slate-600'
-                    }`}
-                  />
-                ))}
-              </div>
+              {danger > 0 ? (
+                <div className="flex items-center text-amber-400">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <Star
+                      key={star}
+                      className={`w-3.5 h-3.5 ${
+                        star <= danger ? 'fill-amber-400 text-amber-400' : 'text-slate-600'
+                      }`}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <span className="text-[11px] text-slate-400 font-medium">未評価</span>
+              )}
 
               {/* 訪問ステータスバッジ */}
               <button
@@ -196,15 +210,17 @@ export const MobileSpotBottomSheet: React.FC<MobileSpotBottomSheetProps> = ({
             {/* Category Badges ([廃墟] [ホテル] [心霊現象]) */}
             {!isRouteActive && (
               <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                {allCategories.map((cat) => (
-                  <span
-                    key={cat.id}
-                    className="px-2 py-0.5 rounded-md text-[10px] font-bold text-white shadow-xs"
-                    style={{ backgroundColor: cat.color }}
-                  >
-                    {cat.label}
-                  </span>
-                ))}
+                {allCategories
+                  .filter((cat) => cat && cat.label && cat.label !== 'カスタム' && cat.id !== 'custom')
+                  .map((cat) => (
+                    <span
+                      key={cat.id}
+                      className="px-2 py-0.5 rounded-md text-[10px] font-bold text-white shadow-xs"
+                      style={{ backgroundColor: cat.color }}
+                    >
+                      {cat.label}
+                    </span>
+                  ))}
                 {spot.notes && (
                   <span className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-slate-800 text-slate-300 border border-slate-700">
                     心霊現象

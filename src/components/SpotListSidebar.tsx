@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Spot, CustomCategory, SpotRouteInfo, UserLocation, SpotListTab, CustomList } from '../types';
 import { ConfirmDeleteModal } from './ConfirmDeleteModal';
-import { JAPAN_PREFECTURES, INITIAL_CATEGORIES, getCategoryDisplay, getCategoryMeta } from '../data/sampleSpots';
+import { JAPAN_PREFECTURES, INITIAL_CATEGORIES, getCategoryDisplay, getCategoryMeta, getSpotMainCategory } from '../data/sampleSpots';
 import { formatDistanceJapanese, formatDurationJapanese } from '../utils/routeUtils';
 import {
   Search,
@@ -33,6 +33,8 @@ import {
   Edit3,
   Trash2,
   ListOrdered,
+  Cloud,
+  FileSpreadsheet,
 } from 'lucide-react';
 
 interface SpotListSidebarProps {
@@ -51,6 +53,7 @@ interface SpotListSidebarProps {
   onResetSamples: () => void;
   onExportData: () => void;
   onImportData: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onOpenDataModal?: () => void;
   isBottomLayout?: boolean;
   selectedPrefecture?: string;
   onSelectPrefecture?: (pref: string) => void;
@@ -70,6 +73,8 @@ interface SpotListSidebarProps {
   onReorderCustomLists?: (newLists: CustomList[]) => void;
   onEditSpot?: (spot: Spot) => void;
   onDeleteSpot?: (id: string) => void;
+  onOpenCloudSync?: () => void;
+  isCloudSyncActive?: boolean;
 }
 
 export const SpotListSidebar: React.FC<SpotListSidebarProps> = ({
@@ -88,6 +93,7 @@ export const SpotListSidebar: React.FC<SpotListSidebarProps> = ({
   onResetSamples,
   onExportData,
   onImportData,
+  onOpenDataModal,
   isBottomLayout = false,
   selectedPrefecture,
   onSelectPrefecture,
@@ -107,6 +113,8 @@ export const SpotListSidebar: React.FC<SpotListSidebarProps> = ({
   onReorderCustomLists,
   onEditSpot,
   onDeleteSpot,
+  onOpenCloudSync,
+  isCloudSyncActive,
 }) => {
   const [draggedTabIndex, setDraggedTabIndex] = useState<number | null>(null);
   const [dragOverTabIndex, setDragOverTabIndex] = useState<number | null>(null);
@@ -1206,21 +1214,29 @@ export const SpotListSidebar: React.FC<SpotListSidebarProps> = ({
                 </span>
               )}
 
-              {selectedCategory !== 'all' && (
-                <span className="inline-flex items-center gap-1 bg-white text-violet-800 px-2 py-0.5 rounded-lg text-[11px] font-bold border border-violet-200 shadow-2xs">
-                  <span>
-                    {getCategoryDisplay(selectedCategory, categories).icon}{' '}
-                    {getCategoryDisplay(selectedCategory, categories).label}
+              {selectedCategory !== 'all' && (() => {
+                const cDisplay = getCategoryDisplay(selectedCategory, categories);
+                const displayLabel =
+                  cDisplay.label && cDisplay.label !== 'カスタム'
+                    ? cDisplay.label
+                    : categories.find((c) => c.id === selectedCategory)?.name || '';
+                if (!displayLabel) return null;
+                return (
+                  <span className="inline-flex items-center gap-1 bg-white text-violet-800 px-2 py-0.5 rounded-lg text-[11px] font-bold border border-violet-200 shadow-2xs">
+                    <span>
+                      {cDisplay.icon}{' '}
+                      {displayLabel}
+                    </span>
+                    <button
+                      onClick={() => setSelectedCategory('all')}
+                      className="text-slate-400 hover:text-red-500 cursor-pointer"
+                      title="カテゴリ絞り込みを解除"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
                   </span>
-                  <button
-                    onClick={() => setSelectedCategory('all')}
-                    className="text-slate-400 hover:text-red-500 cursor-pointer"
-                    title="カテゴリ絞り込みを解除"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </span>
-              )}
+                );
+              })()}
 
               {activePrefecture !== 'all' && (
                 <span className="inline-flex items-center gap-1 bg-white text-violet-800 px-2 py-0.5 rounded-lg text-[11px] font-bold border border-violet-200 shadow-2xs">
@@ -1458,16 +1474,29 @@ export const SpotListSidebar: React.FC<SpotListSidebarProps> = ({
         )}
       </div>
 
-      {/* Footer: Backup & Restore */}
-      <div className="p-2.5 border-t border-slate-200 bg-slate-50 flex items-center justify-between text-[11px] text-slate-600">
-        <div className="flex items-center gap-2">
+      {/* Footer: Backup & Restore / CSV */}
+      <div className="p-2 border-t border-slate-200 bg-slate-50 flex items-center justify-between text-[11px] text-slate-600 gap-1 flex-wrap">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {onOpenDataModal && (
+            <button
+              type="button"
+              onClick={onOpenDataModal}
+              title="CSVエクスポート・インポート / バックアップ管理"
+              className="px-2.5 py-1 rounded-lg bg-violet-50 text-violet-700 hover:bg-violet-100 hover:text-violet-900 border border-violet-200 font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-violet-600" />
+              <span>CSV・データ入出力</span>
+            </button>
+          )}
+
           <button
-            onClick={onExportData}
+            type="button"
+            onClick={onOpenDataModal || onExportData}
             title="登録データをJSONバックアップ"
             className="px-2 py-1 rounded-lg hover:bg-white text-slate-600 hover:text-slate-900 transition-colors flex items-center gap-1 cursor-pointer border border-transparent hover:border-slate-200"
           >
             <Download className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">バックアップ</span>
+            <span className="hidden sm:inline">JSON</span>
           </button>
 
           <label
@@ -1483,6 +1512,23 @@ export const SpotListSidebar: React.FC<SpotListSidebarProps> = ({
               className="hidden"
             />
           </label>
+
+          {onOpenCloudSync && (
+            <button
+              type="button"
+              onClick={onOpenCloudSync}
+              title="Google Driveクラウド同期（自動保存・他端末と同期）"
+              className={`px-2 py-1 rounded-lg transition-colors flex items-center gap-1 cursor-pointer border ${
+                isCloudSyncActive
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100 font-medium'
+                  : 'hover:bg-white text-slate-600 hover:text-slate-900 border-transparent hover:border-slate-200'
+              }`}
+            >
+              <Cloud className={`w-3.5 h-3.5 ${isCloudSyncActive ? 'text-emerald-600' : 'text-slate-500'}`} />
+              <span className="hidden sm:inline">Drive同期</span>
+              {isCloudSyncActive && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>}
+            </button>
+          )}
         </div>
       </div>
 
@@ -1571,8 +1617,11 @@ const SpotCardItem: React.FC<SpotCardItemProps> = ({
   onOpenDetailModal,
 }) => {
   const categoryInfo = getCategoryDisplay(spot.category, categories);
-  const coverPhoto = spot.photos.find((p) => p.isCover) || spot.photos[0];
-  const photoCount = spot.photos.length;
+  const mainCat = getSpotMainCategory(spot, categories);
+  const photos = spot.photos || [];
+  const coverPhoto = photos.find((p) => p.isCover) || photos[0];
+  const hasCoverPhoto = Boolean(coverPhoto && coverPhoto.url && coverPhoto.url.trim() !== '');
+  const photoCount = photos.length;
   const refCount = spot.referenceUrls?.length || 0;
   const hasOrderBadge = isMultiSelected && orderIndex !== undefined && orderIndex >= 0;
   const isHauntedChecked = spot.isHaunted ?? (spot.category === 'haunted');
@@ -1601,15 +1650,23 @@ const SpotCardItem: React.FC<SpotCardItemProps> = ({
       >
         <div className="flex gap-2.5 items-start">
           <div className="relative w-14 h-14 rounded-lg overflow-hidden bg-slate-100 flex-shrink-0 border border-slate-200">
-            {coverPhoto ? (
+            {hasCoverPhoto ? (
               <img
                 src={coverPhoto.url}
                 alt={spot.title}
                 className="w-full h-full object-cover"
               />
             ) : (
-              <div className="w-full h-full flex items-center justify-center text-slate-400">
-                <ImageIcon className="w-5 h-5" />
+              <div
+                className="w-full h-full flex items-center justify-center select-none"
+                style={{
+                  backgroundColor: mainCat.color ? `${mainCat.color}15` : '#f1f5f9',
+                }}
+                title={mainCat.label || categoryInfo.label}
+              >
+                <span className="text-2xl drop-shadow-2xs leading-none">
+                  {mainCat.icon || categoryInfo.icon || '👻'}
+                </span>
               </div>
             )}
             {photoCount > 1 && (
@@ -1621,19 +1678,21 @@ const SpotCardItem: React.FC<SpotCardItemProps> = ({
 
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1 flex-wrap">
-              {Array.from(new Set(spot.categories && spot.categories.length > 0 ? spot.categories : [spot.category])).map((catId, cIdx) => {
-                const cInfo = getCategoryDisplay(catId, categories);
-                return (
-                  <span
-                    key={`${catId}_${cIdx}`}
-                    className="text-[9px] font-bold px-1.5 py-0.2 rounded text-white shadow-2xs flex items-center gap-0.5"
-                    style={{ backgroundColor: cInfo.color }}
-                  >
-                    <span>{cInfo.icon}</span>
-                    <span>{cInfo.label}</span>
-                  </span>
-                );
-              })}
+              {Array.from(new Set(spot.categories && spot.categories.length > 0 ? spot.categories : [spot.category]))
+                .map((catId) => getCategoryDisplay(catId, categories))
+                .filter((cInfo) => cInfo && cInfo.label && cInfo.label !== 'カスタム' && cInfo.id !== 'custom')
+                .map((cInfo, cIdx) => {
+                  return (
+                    <span
+                      key={`${cInfo.id || 'cat'}_${cIdx}`}
+                      className="text-[9px] font-bold px-1.5 py-0.2 rounded text-white shadow-2xs flex items-center gap-0.5"
+                      style={{ backgroundColor: cInfo.color }}
+                    >
+                      <span>{cInfo.icon}</span>
+                      <span>{cInfo.label}</span>
+                    </span>
+                  );
+                })}
               {spot.prefecture && (
                 <span className="text-[10px] text-slate-500 font-semibold truncate">
                   {spot.prefecture}
@@ -1674,10 +1733,15 @@ const SpotCardItem: React.FC<SpotCardItemProps> = ({
                 <span>最短下道 {formatDistanceJapanese(routeInfo.distanceKm)} (約{formatDurationJapanese(routeInfo.durationMinutes)})</span>
               </div>
             )}
-            {spot.rating !== undefined && spot.rating !== null && Number(spot.rating) > 0 && (
+            {spot.rating !== undefined && spot.rating !== null && Number(spot.rating) > 0 ? (
               <div className="flex items-center gap-1 mt-1 text-[10px] text-amber-700 font-bold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/60 w-fit">
                 <Star className="w-2.5 h-2.5 fill-amber-400 text-amber-400" />
                 <span>★ {Number(spot.rating).toFixed(1)}</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1 mt-1 text-[10px] text-slate-400 font-medium bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200/60 w-fit">
+                <Star className="w-2.5 h-2.5 text-slate-300" />
+                <span>未評価</span>
               </div>
             )}
           </div>
@@ -1834,15 +1898,23 @@ const SpotCardItem: React.FC<SpotCardItemProps> = ({
       </button>
 
       <div className="relative flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden bg-slate-100 border border-slate-200">
-        {coverPhoto ? (
+        {hasCoverPhoto ? (
           <img
             src={coverPhoto.url}
             alt={spot.title}
             className="w-full h-full object-cover"
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-slate-400">
-            <ImageIcon className="w-5 h-5" />
+          <div
+            className="w-full h-full flex items-center justify-center select-none"
+            style={{
+              backgroundColor: mainCat.color ? `${mainCat.color}15` : '#f1f5f9',
+            }}
+            title={mainCat.label || categoryInfo.label}
+          >
+            <span className="text-3xl drop-shadow-2xs leading-none">
+              {mainCat.icon || categoryInfo.icon || '👻'}
+            </span>
           </div>
         )}
         {photoCount > 1 && (
@@ -1854,19 +1926,21 @@ const SpotCardItem: React.FC<SpotCardItemProps> = ({
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap">
-          {Array.from(new Set(spot.categories && spot.categories.length > 0 ? spot.categories : [spot.category])).map((catId, cIdx) => {
-            const cInfo = getCategoryDisplay(catId, categories);
-            return (
-              <span
-                key={`${catId}_${cIdx}`}
-                className="text-[10px] font-bold px-1.5 py-0.5 rounded text-white shadow-2xs flex items-center gap-1"
-                style={{ backgroundColor: cInfo.color }}
-              >
-                <span>{cInfo.icon}</span>
-                <span>{cInfo.label}</span>
-              </span>
-            );
-          })}
+          {Array.from(new Set(spot.categories && spot.categories.length > 0 ? spot.categories : [spot.category]))
+            .map((catId) => getCategoryDisplay(catId, categories))
+            .filter((cInfo) => cInfo && cInfo.label && cInfo.label !== 'カスタム' && cInfo.id !== 'custom')
+            .map((cInfo, cIdx) => {
+              return (
+                <span
+                  key={`${cInfo.id || 'cat'}_${cIdx}`}
+                  className="text-[10px] font-bold px-1.5 py-0.5 rounded text-white shadow-2xs flex items-center gap-1"
+                  style={{ backgroundColor: cInfo.color }}
+                >
+                  <span>{cInfo.icon}</span>
+                  <span>{cInfo.label}</span>
+                </span>
+              );
+            })}
           {spot.prefecture && (
             <span className="text-[10px] text-slate-600 font-bold">
               {spot.prefecture}
@@ -1924,10 +1998,15 @@ const SpotCardItem: React.FC<SpotCardItemProps> = ({
         {/* Bottom Actions: Rating & Want-to-go / Haunted list buttons */}
         <div className="flex items-center justify-between gap-2 mt-2 pt-1 border-t border-slate-100 text-[10px] text-slate-400">
           <div className="flex items-center gap-1.5 flex-wrap">
-            {spot.rating !== undefined && spot.rating !== null && Number(spot.rating) > 0 && (
+            {spot.rating !== undefined && spot.rating !== null && Number(spot.rating) > 0 ? (
               <div className="flex items-center gap-1 text-amber-700 font-bold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/60 shadow-2xs">
                 <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
                 <span>★ {Number(spot.rating).toFixed(1)}</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1 text-slate-400 font-medium bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200/60 shadow-2xs">
+                <Star className="w-3 h-3 text-slate-300" />
+                <span>未評価</span>
               </div>
             )}
 

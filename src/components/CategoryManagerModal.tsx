@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { CustomCategory } from '../types';
 import { ConfirmDeleteModal } from './ConfirmDeleteModal';
+import { CategoryIconSelector } from './CategoryIconSelector';
+import { SPOOKY_CATEGORY_PRESETS } from '../data/categoryIcons';
 import {
   X,
   Plus,
@@ -22,7 +24,6 @@ interface CategoryManagerModalProps {
   onSaveCategories: (newCategories: CustomCategory[]) => void;
 }
 
-const PRESET_ICONS = ['👻', '📍', '🏚️', '⛩️', '🌲', '🌉', '🪦', '🕯️', '🦇', '⚠️', '⭐', '📷'];
 const PRESET_COLORS = [
   '#8b5cf6', // Violet
   '#ec4899', // Pink
@@ -154,7 +155,7 @@ export const CategoryManagerModal: React.FC<CategoryManagerModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-[600] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
-      <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[85vh]">
+      <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[88vh]">
         {/* Header */}
         <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
           <div className="flex items-center gap-2">
@@ -205,23 +206,14 @@ export const CategoryManagerModal: React.FC<CategoryManagerModalProps> = ({
                     />
                   </div>
 
-                  {/* Icon presets */}
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-[11px] text-slate-500">アイコン:</span>
-                    {PRESET_ICONS.map((icon) => (
-                      <button
-                        type="button"
-                        key={icon}
-                        onClick={() => setEditIcon(icon)}
-                        className={`w-7 h-7 text-sm rounded-lg flex items-center justify-center cursor-pointer transition-transform ${
-                          editIcon === icon
-                            ? 'bg-white shadow-md scale-110 ring-2 ring-violet-500'
-                            : 'hover:bg-violet-100'
-                        }`}
-                      >
-                        {icon}
-                      </button>
-                    ))}
+                  {/* Icon Selector (心霊スポット特化アイコン & 自由入力) */}
+                  <div className="pt-0.5">
+                    <CategoryIconSelector
+                      selectedIcon={editIcon}
+                      onSelectIcon={setEditIcon}
+                      accentColor={editColor}
+                      compact={true}
+                    />
                   </div>
 
                   {/* Color presets */}
@@ -384,33 +376,55 @@ export const CategoryManagerModal: React.FC<CategoryManagerModalProps> = ({
           {/* Add Category Form */}
           {showAddForm ? (
             <div className="p-3 bg-slate-50 rounded-xl border border-dashed border-slate-300 space-y-2.5">
-              <div className="text-xs font-bold text-slate-800">新規カテゴリを追加</div>
+              <div className="text-xs font-bold text-slate-800 flex items-center justify-between">
+                <span>新規カテゴリを追加</span>
+                <span className="text-[10px] text-slate-400 font-normal">心霊スポット向けプリセットから選択可</span>
+              </div>
+
+              {/* 心霊スポット向けおすすめプリセット */}
+              <div className="space-y-1">
+                <span className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
+                  <span>👻</span>
+                  <span>よく使われる心霊スポットの例（ワンクリック入力）:</span>
+                </span>
+                <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-thin">
+                  {SPOOKY_CATEGORY_PRESETS.map((preset) => (
+                    <button
+                      key={preset.name}
+                      type="button"
+                      onClick={() => {
+                        setNewName(preset.name);
+                        setNewIcon(preset.icon);
+                        setNewColor(preset.color);
+                      }}
+                      className="px-2 py-0.5 text-[11px] font-medium bg-white hover:bg-violet-50 hover:text-violet-700 hover:border-violet-300 border border-slate-200 rounded-lg flex items-center gap-1 whitespace-nowrap cursor-pointer transition-colors shadow-2xs"
+                    >
+                      <span>{preset.icon}</span>
+                      <span>{preset.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="flex items-center gap-2">
                 <input
                   type="text"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
-                  placeholder="カテゴリ名（例：廃墟、歴史的スポット等）"
+                  placeholder="カテゴリ名（例：怪奇現象・心霊現場、旧隧道など）"
                   className="flex-1 px-2.5 py-1 text-xs border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-violet-400 font-medium"
                   autoFocus
                 />
               </div>
 
-              {/* Icon presets */}
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-[11px] text-slate-500">アイコン:</span>
-                {PRESET_ICONS.map((icon) => (
-                  <button
-                    type="button"
-                    key={icon}
-                    onClick={() => setNewIcon(icon)}
-                    className={`w-6 h-6 text-sm rounded flex items-center justify-center cursor-pointer ${
-                      newIcon === icon ? 'bg-white shadow ring-2 ring-violet-500' : 'hover:bg-slate-200'
-                    }`}
-                  >
-                    {icon}
-                  </button>
-                ))}
+              {/* Icon Selector (心霊スポット特化アイコン & 自由入力) */}
+              <div className="pt-0.5">
+                <CategoryIconSelector
+                  selectedIcon={newIcon}
+                  onSelectIcon={setNewIcon}
+                  accentColor={newColor}
+                  compact={true}
+                />
               </div>
 
               {/* Color presets */}

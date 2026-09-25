@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { CustomList } from '../types';
 import { ConfirmDeleteModal } from './ConfirmDeleteModal';
+import { CategoryIconSelector } from './CategoryIconSelector';
 import { X, Plus, Sparkles, Tag, Check, Edit3, Trash2 } from 'lucide-react';
 
 interface CreateListModalProps {
@@ -11,8 +12,6 @@ interface CreateListModalProps {
   onUpdateList?: (listId: string, updated: Omit<CustomList, 'id' | 'createdAt'>) => void;
   onDeleteList?: (listId: string) => void;
 }
-
-const PRESET_ICONS = ['📌', '👻', '⭐', '🚗', '🌙', '🍜', '🏕️', '📸', '🌲', '🏛️', '☕', '🔥', '🌊', '🏯', '🏨', '🎒', '⛩️', '🧭', '🗝️', '🖤'];
 
 const PRESET_COLORS = [
   '#f59e0b', // Amber
@@ -163,27 +162,17 @@ export const CreateListModal: React.FC<CreateListModalProps> = ({
             />
           </div>
 
-          {/* Icon Selector */}
+          {/* Icon Selector (心霊スポット特化アイコン & 自由入力) */}
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1.5">
               アイコン絵文字
             </label>
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {PRESET_ICONS.map((emoji) => (
-                <button
-                  key={emoji}
-                  type="button"
-                  onClick={() => setIcon(emoji)}
-                  className={`w-8 h-8 rounded-lg text-base flex items-center justify-center transition-all cursor-pointer ${
-                    icon === emoji
-                      ? 'bg-violet-100 ring-2 ring-violet-500 scale-110 shadow-2xs'
-                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                  }`}
-                >
-                  {emoji}
-                </button>
-              ))}
-            </div>
+            <CategoryIconSelector
+              selectedIcon={icon}
+              onSelectIcon={setIcon}
+              accentColor={color}
+              compact={false}
+            />
           </div>
 
           {/* Color Selector */}

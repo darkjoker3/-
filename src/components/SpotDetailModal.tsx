@@ -116,19 +116,21 @@ export const SpotDetailModal: React.FC<SpotDetailModalProps> = ({
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100 bg-white flex-shrink-0">
             <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-              {Array.from(new Set(spot.categories && spot.categories.length > 0 ? spot.categories : [spot.category])).map((catId, cIdx) => {
-                const cInfo = getCategoryDisplay(catId, categories);
-                return (
-                  <span
-                    key={`${catId}_${cIdx}`}
-                    className="px-2.5 py-0.5 text-xs font-bold rounded-full border flex items-center gap-1 text-white shadow-2xs"
-                    style={{ backgroundColor: cInfo.color, borderColor: cInfo.color }}
-                  >
-                    <span>{cInfo.icon}</span>
-                    <span>{cInfo.label}</span>
-                  </span>
-                );
-              })}
+              {Array.from(new Set(spot.categories && spot.categories.length > 0 ? spot.categories : [spot.category]))
+                .map((catId) => getCategoryDisplay(catId, categories))
+                .filter((cInfo) => cInfo && cInfo.label && cInfo.label !== 'カスタム' && cInfo.id !== 'custom')
+                .map((cInfo, cIdx) => {
+                  return (
+                    <span
+                      key={`${cInfo.id || 'cat'}_${cIdx}`}
+                      className="px-2.5 py-0.5 text-xs font-bold rounded-full border flex items-center gap-1 text-white shadow-2xs"
+                      style={{ backgroundColor: cInfo.color, borderColor: cInfo.color }}
+                    >
+                      <span>{cInfo.icon}</span>
+                      <span>{cInfo.label}</span>
+                    </span>
+                  );
+                })}
               {spot.prefecture && (
                 <button
                   onClick={() => {
@@ -271,7 +273,7 @@ export const SpotDetailModal: React.FC<SpotDetailModalProps> = ({
                 </button>
               </div>
               <div className="flex flex-wrap items-center gap-2 mt-2 text-xs text-slate-500">
-                {spot.rating !== undefined && spot.rating !== null && (
+                {spot.rating !== undefined && spot.rating !== null && Number(spot.rating) > 0 ? (
                   <div className="flex items-center gap-1.5 text-amber-500 font-semibold mr-2 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
                     <div className="flex items-center gap-0.5">
                       {[1, 2, 3, 4, 5].map((star) => (
@@ -291,6 +293,10 @@ export const SpotDetailModal: React.FC<SpotDetailModalProps> = ({
                     </div>
                     <span className="text-amber-800 font-bold text-xs">{Number(spot.rating).toFixed(1)}</span>
                   </div>
+                ) : (
+                  <span className="text-slate-400 font-medium text-xs mr-2 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
+                    未評価
+                  </span>
                 )}
 
                 {/* Custom Lists Badges */}
