@@ -113,7 +113,7 @@ export const MobileSpotBottomSheet: React.FC<MobileSpotBottomSheetProps> = ({
         <X className="w-4 h-4" />
       </button>
 
-      <div className="p-3.5 flex flex-col gap-2.5 overflow-y-auto no-scrollbar">
+      <div className="p-3 flex flex-col gap-2 overflow-y-auto no-scrollbar">
         {/* 上部スワイプ用バー */}
         <div
           onTouchStart={handleTouchStart}
@@ -123,13 +123,13 @@ export const MobileSpotBottomSheet: React.FC<MobileSpotBottomSheetProps> = ({
         />
 
         {/* Top Info Row */}
-        <div className="flex items-start gap-3">
-          {/* Thumbnail: 確実に80x80pxの正方形枠に収め、縦長・高解像度写真でもカードが突き破られないよう厳格化 */}
+        <div className="flex items-start gap-2.5">
+          {/* Thumbnail: コンパクト正方形枠に収め、はみ出しを完全防止 */}
           {hasCoverPhoto ? (
             <div
               onClick={() => onOpenDetail(spot.id)}
-              className="w-20 h-20 min-w-[80px] min-h-[80px] max-w-[80px] max-h-[80px] rounded-xl overflow-hidden flex-shrink-0 bg-slate-900 border border-slate-800 relative cursor-pointer group shadow-xs"
-              style={{ width: '80px', height: '80px', minWidth: '80px', minHeight: '80px', maxWidth: '80px', maxHeight: '80px' }}
+              className="w-14 h-14 min-w-[56px] min-h-[56px] max-w-[56px] max-h-[56px] rounded-lg overflow-hidden flex-shrink-0 bg-slate-900 border border-slate-800 relative cursor-pointer group shadow-xs"
+              style={{ width: '56px', height: '56px', minWidth: '56px', minHeight: '56px', maxWidth: '56px', maxHeight: '56px' }}
             >
               <img
                 src={coverPhoto.url}
@@ -138,7 +138,7 @@ export const MobileSpotBottomSheet: React.FC<MobileSpotBottomSheetProps> = ({
                 loading="lazy"
               />
               {photos.length > 1 && (
-                <span className="absolute bottom-1 right-1 bg-black/80 text-white text-[9px] font-bold px-1.5 py-0.5 rounded backdrop-blur-xs">
+                <span className="absolute bottom-0.5 right-0.5 bg-black/80 text-white text-[8px] font-bold px-1 py-0.2 rounded backdrop-blur-xs">
                   +{photos.length}
                 </span>
               )}
@@ -146,58 +146,58 @@ export const MobileSpotBottomSheet: React.FC<MobileSpotBottomSheetProps> = ({
           ) : (
             <div
               onClick={() => onOpenDetail(spot.id)}
-              className="w-20 h-20 min-w-[80px] min-h-[80px] max-w-[80px] max-h-[80px] rounded-xl flex-shrink-0 border border-slate-800 flex flex-col items-center justify-center cursor-pointer shadow-xs select-none"
+              className="w-14 h-14 min-w-[56px] min-h-[56px] max-w-[56px] max-h-[56px] rounded-lg flex-shrink-0 border border-slate-800 flex flex-col items-center justify-center cursor-pointer shadow-xs select-none"
               style={{
-                width: '80px',
-                height: '80px',
-                minWidth: '80px',
-                minHeight: '80px',
-                maxWidth: '80px',
-                maxHeight: '80px',
+                width: '56px',
+                height: '56px',
+                minWidth: '56px',
+                minHeight: '56px',
+                maxWidth: '56px',
+                maxHeight: '56px',
                 backgroundColor: mainCat.color ? `${mainCat.color}25` : '#0f172a',
               }}
             >
-              <span className="text-3xl drop-shadow-2xs leading-none">{mainCat.icon || '👻'}</span>
+              <span className="text-2xl drop-shadow-2xs leading-none">{mainCat.icon || '👻'}</span>
             </div>
           )}
 
           {/* Details (タイトル, 都道府県 市区町村, ★★★★★, 訪問済み) */}
-          <div className="flex-1 min-w-0 pr-7">
+          <div className="flex-1 min-w-0 pr-6">
             <h3
               onClick={() => onOpenDetail(spot.id)}
-              className="text-sm font-bold text-white tracking-tight line-clamp-2 cursor-pointer hover:text-slate-200 leading-snug"
+              className="text-xs sm:text-sm font-bold text-white tracking-tight line-clamp-1 truncate cursor-pointer hover:text-slate-200 leading-snug"
             >
               {spot.title}
             </h3>
 
             {/* Location (長野県 千曲市) */}
-            <div className="text-xs text-slate-400 mt-1 truncate font-medium flex items-center gap-1">
-              <MapPin className="w-3 h-3 text-slate-400 flex-shrink-0" />
+            <div className="text-[10px] text-slate-400 mt-0.5 truncate font-medium flex items-center gap-1">
+              <MapPin className="w-2.5 h-2.5 text-slate-400 flex-shrink-0" />
               <span className="truncate">{spot.prefecture || ''} {spot.city || spot.address || ''}</span>
             </div>
 
             {/* Stars & Visit Status (★★★★☆ + 訪問済み) */}
-            <div className="flex items-center gap-2 mt-1.5">
+            <div className="flex items-center gap-1.5 mt-1">
               {danger > 0 ? (
                 <div className="flex items-center text-amber-400">
                   {[1, 2, 3, 4, 5].map((star) => (
                     <Star
                       key={star}
-                      className={`w-3.5 h-3.5 ${
+                      className={`w-3 h-3 ${
                         star <= danger ? 'fill-amber-400 text-amber-400' : 'text-slate-600'
                       }`}
                     />
                   ))}
                 </div>
               ) : (
-                <span className="text-[11px] text-slate-400 font-medium">未評価</span>
+                <span className="text-[10px] text-slate-400 font-medium">未評価</span>
               )}
 
               {/* 訪問ステータスバッジ */}
               <button
                 type="button"
                 onClick={() => onToggleVisited && onToggleVisited(spot.id)}
-                className={`px-2 py-0.5 rounded-full text-[10px] font-bold transition-all cursor-pointer ${
+                className={`px-1.5 py-0.2 rounded-full text-[9.5px] font-bold transition-all cursor-pointer leading-tight ${
                   spot.isVisited
                     ? 'bg-red-600 text-white'
                     : 'bg-slate-800 text-slate-400 hover:text-slate-200'
@@ -209,20 +209,21 @@ export const MobileSpotBottomSheet: React.FC<MobileSpotBottomSheetProps> = ({
 
             {/* Category Badges ([廃墟] [ホテル] [心霊現象]) */}
             {!isRouteActive && (
-              <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+              <div className="flex flex-wrap items-center gap-1 mt-1">
                 {allCategories
                   .filter((cat) => cat && cat.label && cat.label !== 'カスタム' && cat.id !== 'custom')
+                  .slice(0, 3)
                   .map((cat) => (
                     <span
                       key={cat.id}
-                      className="px-2 py-0.5 rounded-md text-[10px] font-bold text-white shadow-xs"
+                      className="px-1.5 py-0.2 rounded text-[9px] font-bold text-white shadow-xs leading-tight"
                       style={{ backgroundColor: cat.color }}
                     >
                       {cat.label}
                     </span>
                   ))}
                 {spot.notes && (
-                  <span className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-slate-800 text-slate-300 border border-slate-700">
+                  <span className="px-1.5 py-0.2 rounded text-[9px] font-medium bg-slate-800 text-slate-300 border border-slate-700 leading-tight">
                     心霊現象
                   </span>
                 )}
@@ -233,12 +234,12 @@ export const MobileSpotBottomSheet: React.FC<MobileSpotBottomSheetProps> = ({
 
         {/* 現在地からの距離（ルート未開始時でもGPSオンなら表示） */}
         {!isRouteActive && distanceKm !== null && distanceKm > 0 && (
-          <div className="flex items-center justify-between text-xs py-1.5 px-3 bg-slate-900/80 rounded-xl border border-slate-800 text-slate-300">
-            <span className="flex items-center gap-1.5 text-slate-400 text-[11px]">
-              <Navigation className="w-3.5 h-3.5 text-blue-400" />
+          <div className="flex items-center justify-between text-xs py-1 px-2.5 bg-slate-900/80 rounded-lg border border-slate-800 text-slate-300">
+            <span className="flex items-center gap-1 text-slate-400 text-[10px]">
+              <Navigation className="w-3 h-3 text-blue-400" />
               <span>現在地からの下道直線目安</span>
             </span>
-            <span className="font-bold text-white text-xs">
+            <span className="font-bold text-white text-[11px]">
               約 {formatDistanceJapanese(distanceKm)}
             </span>
           </div>
@@ -246,23 +247,23 @@ export const MobileSpotBottomSheet: React.FC<MobileSpotBottomSheetProps> = ({
 
         {/* ================= SCREEN 3: ルート結果 統計情報 (下道最短) ================= */}
         {isRouteActive && routeInfo && (
-          <div className="grid grid-cols-3 gap-2 py-2 px-3 bg-slate-900/90 rounded-xl border border-slate-800 text-center">
+          <div className="grid grid-cols-3 gap-1.5 py-1.5 px-2 bg-slate-900/90 rounded-lg border border-slate-800 text-center">
             <div>
-              <div className="text-[10px] text-slate-400 font-medium">総距離</div>
-              <div className="text-base font-bold text-white mt-0.5">
+              <div className="text-[9px] text-slate-400 font-medium">総距離</div>
+              <div className="text-sm font-bold text-white mt-0.5">
                 {routeInfo.distanceKm}km
               </div>
             </div>
             <div className="border-x border-slate-800">
-              <div className="text-[10px] text-slate-400 font-medium">走行時間</div>
-              <div className="text-base font-bold text-white mt-0.5">
+              <div className="text-[9px] text-slate-400 font-medium">走行時間</div>
+              <div className="text-sm font-bold text-white mt-0.5">
                 {formatDurationJapanese(routeInfo.durationMinutes)}
               </div>
             </div>
             <div>
-              <div className="text-[10px] text-slate-400 font-medium">ルート種別</div>
-              <div className="text-xs font-bold text-cyan-400 mt-1">
-                下道 <span className="text-[10px] font-normal text-cyan-300">(最速ルート)</span>
+              <div className="text-[9px] text-slate-400 font-medium">ルート種別</div>
+              <div className="text-[11px] font-bold text-cyan-400 mt-0.5">
+                下道 <span className="text-[9px] font-normal text-cyan-300">(最速)</span>
               </div>
             </div>
           </div>
@@ -274,7 +275,7 @@ export const MobileSpotBottomSheet: React.FC<MobileSpotBottomSheetProps> = ({
           <button
             type="button"
             onClick={() => onOpenDetail(spot.id)}
-            className="py-2.5 px-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all border border-slate-700/80 cursor-pointer min-h-[44px] text-center"
+            className="py-2 px-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all border border-slate-700/80 cursor-pointer min-h-[40px] text-center"
           >
             {isRouteActive ? 'ルート詳細' : '詳細を見る'}
           </button>
@@ -285,7 +286,7 @@ export const MobileSpotBottomSheet: React.FC<MobileSpotBottomSheetProps> = ({
               href={navUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="py-2.5 px-3 bg-red-600 hover:bg-red-500 active:bg-red-700 text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-red-900/40 flex items-center justify-center gap-1.5 cursor-pointer min-h-[44px] text-center"
+              className="py-2 px-3 bg-red-600 hover:bg-red-500 active:bg-red-700 text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-red-900/40 flex items-center justify-center gap-1.5 cursor-pointer min-h-[40px] text-center"
             >
               <Navigation className="w-3.5 h-3.5 fill-current" />
               <span>ナビを開始</span>
@@ -294,7 +295,7 @@ export const MobileSpotBottomSheet: React.FC<MobileSpotBottomSheetProps> = ({
             <button
               type="button"
               onClick={() => onStartRoute(spot)}
-              className="py-2.5 px-3 bg-red-600 hover:bg-red-500 active:bg-red-700 text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-red-900/40 flex items-center justify-center gap-1.5 cursor-pointer min-h-[44px]"
+              className="py-2 px-3 bg-red-600 hover:bg-red-500 active:bg-red-700 text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-red-900/40 flex items-center justify-center gap-1.5 cursor-pointer min-h-[40px]"
             >
               <Navigation className="w-3.5 h-3.5 fill-current" />
               <span>ルート案内</span>

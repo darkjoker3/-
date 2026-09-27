@@ -266,11 +266,11 @@ export const MobileSpotListView: React.FC<MobileSpotListViewProps> = ({
                   onSelectSpot(spot.id);
                   onBackToMap();
                 }}
-                className="bg-slate-900/90 hover:bg-slate-850 active:bg-slate-800 border border-slate-800 rounded-2xl p-2.5 flex items-center gap-3 transition-colors cursor-pointer shadow-sm group"
+                className="bg-slate-900/90 hover:bg-slate-850 active:bg-slate-800 border border-slate-800 rounded-xl p-2 flex items-center gap-2.5 transition-colors cursor-pointer shadow-sm group"
               >
                 {/* Photo Thumbnail */}
                 {hasCoverPhoto ? (
-                  <div className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 bg-slate-800 border border-slate-700">
+                  <div className="w-13 h-13 min-w-[52px] min-h-[52px] max-w-[52px] max-h-[52px] rounded-lg overflow-hidden flex-shrink-0 bg-slate-800 border border-slate-700">
                     <img
                       src={coverPhoto.url}
                       alt={spot.title}
@@ -280,7 +280,7 @@ export const MobileSpotListView: React.FC<MobileSpotListViewProps> = ({
                   </div>
                 ) : (
                   <div
-                    className="w-16 h-16 rounded-xl flex-shrink-0 border border-slate-700/80 flex items-center justify-center text-3xl select-none"
+                    className="w-13 h-13 min-w-[52px] min-h-[52px] max-w-[52px] max-h-[52px] rounded-lg flex-shrink-0 border border-slate-700/80 flex items-center justify-center text-2xl select-none"
                     style={{
                       backgroundColor: mainCat.color ? `${mainCat.color}25` : '#1e293b',
                     }}
@@ -291,47 +291,47 @@ export const MobileSpotListView: React.FC<MobileSpotListViewProps> = ({
 
                 {/* Info Center */}
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-xs font-bold text-white tracking-tight truncate">
+                  <h3 className="text-xs font-bold text-white tracking-tight truncate leading-snug">
                     {spot.title}
                   </h3>
-                  <div className="text-[11px] text-slate-400 truncate mt-0.5 font-medium">
+                  <div className="text-[10px] text-slate-400 truncate mt-0.5 font-medium">
                     {spot.prefecture || ''} {spot.city || spot.address || ''}
                   </div>
 
                   {/* Stars / 未評価 */}
                   {danger > 0 ? (
-                    <div className="flex items-center text-amber-400 mt-1">
+                    <div className="flex items-center text-amber-400 mt-0.5">
                       {[1, 2, 3, 4, 5].map((star) => (
                         <Star
                           key={star}
-                          className={`w-3 h-3 ${
+                          className={`w-2.5 h-2.5 ${
                             star <= danger ? 'fill-amber-400 text-amber-400' : 'text-slate-700'
                           }`}
                         />
                       ))}
                     </div>
                   ) : (
-                    <div className="text-[10px] text-slate-500 font-medium mt-1">
+                    <div className="text-[9px] text-slate-500 font-medium mt-0.5">
                       未評価
                     </div>
                   )}
 
                   {/* Badges */}
-                  <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                  <div className="flex flex-wrap items-center gap-1 mt-1">
                     {allCats
                       .filter((cat) => cat && cat.label && cat.label !== 'カスタム' && cat.id !== 'custom')
                       .slice(0, 2)
                       .map((cat) => (
                         <span
                           key={cat.id}
-                          className="px-2 py-0.5 rounded-md text-[10px] font-bold text-white shadow-2xs"
+                          className="px-1.5 py-0.2 rounded text-[9px] font-bold text-white shadow-2xs leading-tight"
                           style={{ backgroundColor: cat.color }}
                         >
                           {cat.label}
                         </span>
                       ))}
                     {spot.isVisited && (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-600 text-white">
+                      <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-red-600 text-white leading-tight">
                         訪問済み
                       </span>
                     )}
@@ -341,11 +341,11 @@ export const MobileSpotListView: React.FC<MobileSpotListViewProps> = ({
                 {/* Right: Distance & Chevron */}
                 <div className="flex items-center gap-1 text-slate-400 flex-shrink-0 pl-1">
                   {distanceKm !== null && (
-                    <span className="text-xs text-slate-300 font-medium">
+                    <span className="text-[11px] text-slate-300 font-medium">
                       {distanceKm}km
                     </span>
                   )}
-                  <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-white transition-colors" />
+                  <ChevronRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-white transition-colors" />
                 </div>
               </div>
             );

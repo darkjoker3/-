@@ -295,26 +295,19 @@ export const SpotFormModal: React.FC<SpotFormModalProps> = ({
     }
   };
 
-  const handleCompositionEnd = () => {
+  const handleCompositionEnd = (e: React.CompositionEvent<HTMLInputElement>) => {
     isComposingRef.current = false;
-    const capturedKana = compositionKanaBufferRef.current;
-    if (capturedKana && !isManualYomigana) {
-      setYomigana((prev) => {
-        const next = (prev ? prev + capturedKana : capturedKana).trim();
-        return next;
-      });
-      setReadingBadge('⌨️ 入力変換補完');
-    }
+    const currentVal = (e.currentTarget?.value || title).trim();
     compositionKanaBufferRef.current = '';
 
-    // IME変換確定後、最新のスポット名に基づきAI自動補完をスケジュール（より高精度な完全な読み仮名で上書き）
-    if (!isManualYomigana && title.trim().length >= 2) {
+    // IME変換確定後、最新のスポット名に基づきGemini AI自動補完を即座にスケジュール
+    if (!isManualYomigana && currentVal.length >= 1) {
       if (autoReadingTimeoutRef.current) {
         clearTimeout(autoReadingTimeoutRef.current);
       }
       autoReadingTimeoutRef.current = setTimeout(() => {
-        handleFetchReading(title, true);
-      }, 700);
+        handleFetchReading(currentVal, true);
+      }, 300);
     }
   };
 
@@ -333,19 +326,20 @@ export const SpotFormModal: React.FC<SpotFormModalProps> = ({
       clearTimeout(autoReadingTimeoutRef.current);
     }
 
-    // ユーザー自身が読み仮名欄を手動編集していない場合、入力停止後（700ms後）に自動補完
-    if (!isManualYomigana && newTitle.trim().length >= 2) {
+    // ユーザー自身が読み仮名欄を手動編集していない場合、入力停止後（400ms後）に自動補完
+    if (!isManualYomigana && newTitle.trim().length >= 1) {
       autoReadingTimeoutRef.current = setTimeout(() => {
         if (!isComposingRef.current) {
           handleFetchReading(newTitle, true);
         }
-      }, 700);
+      }, 400);
     }
   };
 
-  const handleTitleBlur = () => {
-    if (!isManualYomigana && title.trim().length >= 2) {
-      handleFetchReading(title, true);
+  const handleTitleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    const currentVal = (e.target.value || title).trim();
+    if (!isManualYomigana && currentVal.length >= 1 && (!yomigana || !yomigana.trim())) {
+      handleFetchReading(currentVal, true);
     }
   };
 
@@ -595,13 +589,18 @@ export const SpotFormModal: React.FC<SpotFormModalProps> = ({
     }
     setFormError(null);
 
-    // 読み仮名が空の場合、自動生成して確実に保管（自動保管の保証）
+    // 読み仮名が空の場合、Gemini AI自動生成して確実に保管（自動保管の保証）
     let finalYomigana = yomigana.trim();
-    if (!finalYomigana) {
+    if (!finalYomigana && title.trim()) {
       try {
-        finalYomigana = await generateYomigana(title.trim(), address);
+        const fetched = await handleFetchReading(title.trim(), true);
+        if (fetched) finalYomigana = fetched;
       } catch {
-        // ignore
+        try {
+          finalYomigana = await generateYomigana(title.trim(), address);
+        } catch {
+          // ignore
+        }
       }
     }
 

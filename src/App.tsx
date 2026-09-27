@@ -20,6 +20,7 @@ import { FilterSearchModal } from './components/FilterSearchModal';
 import { MobileSpotListView } from './components/MobileSpotListView';
 import { DataExportImportModal } from './components/DataExportImportModal';
 import { fetchLocalRoadRoute } from './utils/routeUtils';
+import { generateYomigana } from './utils/yomiganaUtils';
 import {
   MapPin,
   Plus,
@@ -1362,6 +1363,8 @@ export default function App() {
     data: Omit<Spot, 'id' | 'createdAt' | 'updatedAt'>,
     editId?: string
   ) => {
+    const finalId = editId || `spot_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+
     if (editId) {
       setSpots((prev) =>
         deduplicateSpots(
@@ -1381,7 +1384,7 @@ export default function App() {
     } else {
       const newSpot: Spot = {
         ...data,
-        id: `spot_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        id: finalId,
         createdAt: Date.now(),
         updatedAt: Date.now(),
       };
@@ -1402,6 +1405,23 @@ export default function App() {
       showToast(`「${newSpot.title}」を登録しました！${listNote}`, 'success');
     }
     setPendingLatLng(null);
+
+    // 読み仮名が空の場合、非同期でGemini AI自動生成して確実にスポットデータへ自動保管
+    if (!data.yomigana || !data.yomigana.trim()) {
+      generateYomigana(data.title, data.address)
+        .then((generatedYomi) => {
+          if (generatedYomi && generatedYomi.trim()) {
+            setSpots((prev) =>
+              prev.map((s) =>
+                s.id === finalId && (!s.yomigana || !s.yomigana.trim())
+                  ? { ...s, yomigana: generatedYomi.trim(), updatedAt: Date.now() }
+                  : s
+              )
+            );
+          }
+        })
+        .catch(() => {});
+    }
   };
 
   // Delete spot

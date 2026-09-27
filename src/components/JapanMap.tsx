@@ -1128,11 +1128,11 @@ export const JapanMap: React.FC<JapanMapProps> = ({
                 : ''
             }
 
-            <div class="py-1 px-2.5 rounded-xl shadow-lg border transition-all duration-200 font-bold text-xs tracking-tight whitespace-nowrap max-w-[220px] truncate flex items-center gap-1.5 ${
+            <div class="py-0.5 px-2 rounded-lg shadow-md border transition-all duration-200 font-bold text-[11px] tracking-tight whitespace-nowrap max-w-[170px] truncate flex items-center gap-1 ${
               isMultiSelected
-                ? 'bg-slate-950 text-white border-2 border-emerald-400 ring-4 ring-emerald-500/40 shadow-emerald-500/30'
+                ? 'bg-slate-950 text-white border-2 border-emerald-400 ring-2 ring-emerald-500/40 shadow-emerald-500/30'
                 : isSelected
-                ? 'bg-slate-950 text-white border-2 ring-4 shadow-xl'
+                ? 'bg-slate-950 text-white border-2 ring-2 shadow-xl'
                 : 'bg-slate-900/95 text-white border-slate-700 hover:border-slate-500 hover:scale-105'
             }" style="${
               isSelected

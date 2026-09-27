@@ -1121,14 +1121,14 @@ export const SpotListSidebar: React.FC<SpotListSidebarProps> = ({
         </div>
 
         {/* Compact Filters Row: Category Dropdown & Prefecture Dropdown & Sort */}
-        <div className="grid grid-cols-3 gap-1.5">
+        <div className="grid grid-cols-3 gap-1">
           {/* Category Filter Dropdown */}
           <div className="relative col-span-1">
             <select
               id="category-filter-select"
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
-              className={`w-full text-xs border rounded-xl px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-violet-500/20 cursor-pointer font-bold transition-all shadow-2xs truncate ${
+              className={`w-full text-[11px] border rounded-lg px-1.5 py-1 focus:outline-none focus:ring-2 focus:ring-violet-500/20 cursor-pointer font-bold transition-all shadow-2xs truncate ${
                 selectedCategory !== 'all'
                   ? 'bg-violet-600 text-white border-violet-700 shadow-violet-500/20'
                   : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-300'
@@ -1155,7 +1155,7 @@ export const SpotListSidebar: React.FC<SpotListSidebarProps> = ({
               id="prefecture-filter-select"
               value={activePrefecture}
               onChange={(e) => setPrefecture(e.target.value)}
-              className={`w-full text-xs border rounded-xl px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-violet-500/20 cursor-pointer font-medium transition-all shadow-2xs truncate ${
+              className={`w-full text-[11px] border rounded-lg px-1.5 py-1 focus:outline-none focus:ring-2 focus:ring-violet-500/20 cursor-pointer font-medium transition-all shadow-2xs truncate ${
                 activePrefecture !== 'all'
                   ? 'bg-blue-600 text-white border-blue-700 font-bold'
                   : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-300'
@@ -1182,7 +1182,7 @@ export const SpotListSidebar: React.FC<SpotListSidebarProps> = ({
               id="sort-by-select"
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as any)}
-              className="w-full text-xs bg-white hover:bg-slate-50 border border-slate-300 rounded-xl px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-violet-500/20 cursor-pointer text-slate-800 font-medium shadow-2xs truncate"
+              className="w-full text-[11px] bg-white hover:bg-slate-50 border border-slate-300 rounded-lg px-1.5 py-1 focus:outline-none focus:ring-2 focus:ring-violet-500/20 cursor-pointer text-slate-800 font-medium shadow-2xs truncate"
               title="並び順を選択"
             >
               <option value="newest">🕒 新しい順</option>
@@ -1640,7 +1640,7 @@ const SpotCardItem: React.FC<SpotCardItemProps> = ({
       <div
         id={`spot-card-${spot.id}`}
         onClick={handleCardClick}
-        className={`rounded-xl border p-2.5 transition-all cursor-pointer flex flex-col justify-between ${
+        className={`rounded-xl border p-2 transition-all cursor-pointer flex flex-col justify-between ${
           isSelected
             ? 'bg-violet-50/80 border-violet-500 shadow-md ring-2 ring-violet-300'
             : isMultiSelected
@@ -1648,8 +1648,8 @@ const SpotCardItem: React.FC<SpotCardItemProps> = ({
             : 'bg-white hover:bg-slate-50/90 border-slate-200 hover:border-slate-300 shadow-2xs'
         }`}
       >
-        <div className="flex gap-2.5 items-start">
-          <div className="relative w-14 h-14 rounded-lg overflow-hidden bg-slate-100 flex-shrink-0 border border-slate-200">
+        <div className="flex gap-2 items-start">
+          <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-slate-100 flex-shrink-0 border border-slate-200">
             {hasCoverPhoto ? (
               <img
                 src={coverPhoto.url}
@@ -1664,13 +1664,13 @@ const SpotCardItem: React.FC<SpotCardItemProps> = ({
                 }}
                 title={mainCat.label || categoryInfo.label}
               >
-                <span className="text-2xl drop-shadow-2xs leading-none">
+                <span className="text-xl drop-shadow-2xs leading-none">
                   {mainCat.icon || categoryInfo.icon || '👻'}
                 </span>
               </div>
             )}
             {photoCount > 1 && (
-              <span className="absolute bottom-0.5 right-0.5 bg-black/75 text-white text-[9px] font-bold px-1 rounded">
+              <span className="absolute bottom-0.5 right-0.5 bg-black/75 text-white text-[8px] font-bold px-1 rounded">
                 📷{photoCount}
               </span>
             )}
@@ -1681,11 +1681,12 @@ const SpotCardItem: React.FC<SpotCardItemProps> = ({
               {Array.from(new Set(spot.categories && spot.categories.length > 0 ? spot.categories : [spot.category]))
                 .map((catId) => getCategoryDisplay(catId, categories))
                 .filter((cInfo) => cInfo && cInfo.label && cInfo.label !== 'カスタム' && cInfo.id !== 'custom')
+                .slice(0, 3)
                 .map((cInfo, cIdx) => {
                   return (
                     <span
                       key={`${cInfo.id || 'cat'}_${cIdx}`}
-                      className="text-[9px] font-bold px-1.5 py-0.2 rounded text-white shadow-2xs flex items-center gap-0.5"
+                      className="text-[8.5px] font-bold px-1.5 py-0.2 rounded text-white shadow-2xs flex items-center gap-0.5 leading-tight"
                       style={{ backgroundColor: cInfo.color }}
                     >
                       <span>{cInfo.icon}</span>
@@ -1694,18 +1695,18 @@ const SpotCardItem: React.FC<SpotCardItemProps> = ({
                   );
                 })}
               {spot.prefecture && (
-                <span className="text-[10px] text-slate-500 font-semibold truncate">
+                <span className="text-[9px] text-slate-500 font-semibold truncate">
                   {spot.prefecture}
                 </span>
               )}
             </div>
-            <div className="flex items-center justify-between gap-1 mt-1">
-              <div className="min-w-0">
-                <h3 className="text-xs font-bold text-slate-900 truncate">
+            <div className="flex items-center justify-between gap-1 mt-0.5">
+              <div className="min-w-0 flex-1">
+                <h3 className="text-[11.5px] font-bold text-slate-900 truncate leading-snug">
                   {spot.title}
                 </h3>
                 {spot.yomigana && (
-                  <span className="text-[10px] text-slate-400 font-medium truncate block">
+                  <span className="text-[9px] text-slate-400 font-medium truncate block leading-tight">
                     {spot.yomigana}
                   </span>
                 )}
@@ -1717,45 +1718,44 @@ const SpotCardItem: React.FC<SpotCardItemProps> = ({
                     e.stopPropagation();
                     onDeleteSpot(spot);
                   }}
-                  className="flex-shrink-0 px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1 bg-rose-50 text-rose-700 hover:bg-rose-100 hover:text-rose-800 border border-rose-200 transition-colors cursor-pointer shadow-2xs"
-                  title="このスポットを登録から削除"
+                  className="flex-shrink-0 p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition-colors cursor-pointer"
+                  title="このスポットをリストから削除"
                 >
-                  <Trash2 className="w-3 h-3 text-rose-600" />
-                  <span>リストの削除</span>
+                  <Trash2 className="w-3 h-3 text-rose-500" />
                 </button>
               )}
             </div>
 
             {/* Local Road Info in Card */}
             {routeInfo && routeInfo.status === 'success' && (
-              <div className="text-[10px] font-bold text-violet-700 mt-0.5 flex items-center gap-1">
-                <Car className="w-3 h-3 text-violet-600" />
+              <div className="text-[9px] font-bold text-violet-700 mt-0.5 flex items-center gap-1">
+                <Car className="w-2.5 h-2.5 text-violet-600" />
                 <span>最短下道 {formatDistanceJapanese(routeInfo.distanceKm)} (約{formatDurationJapanese(routeInfo.durationMinutes)})</span>
               </div>
             )}
             {spot.rating !== undefined && spot.rating !== null && Number(spot.rating) > 0 ? (
-              <div className="flex items-center gap-1 mt-1 text-[10px] text-amber-700 font-bold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/60 w-fit">
-                <Star className="w-2.5 h-2.5 fill-amber-400 text-amber-400" />
+              <div className="flex items-center gap-1 mt-0.5 text-[9px] text-amber-700 font-bold bg-amber-50 px-1 py-0.2 rounded border border-amber-200/60 w-fit">
+                <Star className="w-2 h-2 fill-amber-400 text-amber-400" />
                 <span>★ {Number(spot.rating).toFixed(1)}</span>
               </div>
             ) : (
-              <div className="flex items-center gap-1 mt-1 text-[10px] text-slate-400 font-medium bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200/60 w-fit">
-                <Star className="w-2.5 h-2.5 text-slate-300" />
+              <div className="flex items-center gap-1 mt-0.5 text-[9px] text-slate-400 font-medium bg-slate-50 px-1 py-0.2 rounded border border-slate-200/60 w-fit">
+                <Star className="w-2 h-2 text-slate-300" />
                 <span>未評価</span>
               </div>
             )}
           </div>
         </div>
 
-        <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-slate-100 text-[10px] text-slate-400 flex-wrap gap-1">
-          <div className="flex items-center gap-1.5 flex-wrap">
+        <div className="flex items-center justify-between mt-1.5 pt-1 border-t border-slate-100 text-[9px] text-slate-400 flex-wrap gap-1">
+          <div className="flex items-center gap-1 flex-wrap">
             <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 onToggleMultiSelect(spot.id);
               }}
-              className={`px-1.5 py-0.5 rounded flex items-center gap-1 font-bold cursor-pointer transition-colors ${
+              className={`px-1.5 py-0.5 rounded flex items-center gap-0.5 font-bold cursor-pointer transition-colors ${
                 isMultiSelected
                   ? 'text-emerald-800 bg-emerald-100/90 border border-emerald-300'
                   : 'text-slate-400 hover:text-emerald-700 hover:bg-slate-100'
@@ -1763,13 +1763,13 @@ const SpotCardItem: React.FC<SpotCardItemProps> = ({
               title="ピン同士の下道ルート対象に追加/解除"
             >
               {hasOrderBadge ? (
-                <span className="w-4 h-4 rounded-full bg-emerald-700 text-white text-[9px] font-black flex items-center justify-center">
+                <span className="w-3.5 h-3.5 rounded-full bg-emerald-700 text-white text-[8px] font-black flex items-center justify-center">
                   {(orderIndex ?? 0) + 1}
                 </span>
               ) : isMultiSelected ? (
-                <CheckSquare className="w-3.5 h-3.5 text-emerald-700" />
+                <CheckSquare className="w-3 h-3 text-emerald-700" />
               ) : (
-                <Square className="w-3.5 h-3.5" />
+                <Square className="w-3 h-3" />
               )}
               <span>{isMultiSelected ? 'ルート中' : '+ ルート'}</span>
             </button>
@@ -1781,7 +1781,7 @@ const SpotCardItem: React.FC<SpotCardItemProps> = ({
                   e.stopPropagation();
                   onToggleWantToGo(spot.id);
                 }}
-                className={`px-1.5 py-0.5 rounded text-[10px] font-bold flex items-center gap-0.5 transition-colors cursor-pointer ${
+                className={`px-1.5 py-0.5 rounded text-[9px] font-bold flex items-center gap-0.5 transition-colors cursor-pointer ${
                   spot.isWantToGo
                     ? 'bg-amber-100 text-amber-900 border border-amber-300'
                     : 'bg-slate-100 text-slate-400 hover:text-amber-800 hover:bg-amber-50'
@@ -1800,7 +1800,7 @@ const SpotCardItem: React.FC<SpotCardItemProps> = ({
                   e.stopPropagation();
                   onToggleHaunted(spot.id);
                 }}
-                className={`px-1.5 py-0.5 rounded text-[10px] font-bold flex items-center gap-0.5 transition-colors cursor-pointer ${
+                className={`px-1.5 py-0.5 rounded text-[9px] font-bold flex items-center gap-0.5 transition-colors cursor-pointer ${
                   isHauntedChecked
                     ? 'bg-violet-100 text-violet-900 border border-violet-300'
                     : 'bg-slate-100 text-slate-400 hover:text-violet-800 hover:bg-violet-50'
@@ -1819,7 +1819,7 @@ const SpotCardItem: React.FC<SpotCardItemProps> = ({
                   e.stopPropagation();
                   onOpenListManager(spot.id);
                 }}
-                className="px-1.5 py-0.5 rounded text-[10px] font-bold flex items-center gap-0.5 bg-slate-100 text-slate-600 hover:text-violet-700 hover:bg-violet-50 border border-slate-200 transition-colors cursor-pointer"
+                className="px-1.5 py-0.5 rounded text-[9px] font-bold flex items-center gap-0.5 bg-slate-100 text-slate-600 hover:text-violet-700 hover:bg-violet-50 border border-slate-200 transition-colors cursor-pointer"
                 title="所属リストの管理・登録・解除"
               >
                 <span>📋</span>
@@ -1834,7 +1834,7 @@ const SpotCardItem: React.FC<SpotCardItemProps> = ({
                   e.stopPropagation();
                   onEditSpot(spot);
                 }}
-                className="px-1.5 py-0.5 rounded text-[10px] font-bold flex items-center gap-0.5 bg-violet-50 text-violet-700 hover:bg-violet-100 border border-violet-200 transition-colors cursor-pointer"
+                className="px-1.5 py-0.5 rounded text-[9px] font-bold flex items-center gap-0.5 bg-violet-50 text-violet-700 hover:bg-violet-100 border border-violet-200 transition-colors cursor-pointer"
                 title="スポット内容を編集"
               >
                 <Edit3 className="w-2.5 h-2.5 text-violet-600" />
@@ -1866,7 +1866,7 @@ const SpotCardItem: React.FC<SpotCardItemProps> = ({
     <div
       id={`spot-item-${spot.id}`}
       onClick={handleCardClick}
-      className={`p-3 flex items-start gap-3 cursor-pointer transition-all ${
+      className={`p-2.5 flex items-start gap-2.5 cursor-pointer transition-all ${
         isSelected
           ? 'bg-violet-50/80 border-l-4 border-l-violet-600 shadow-2xs'
           : isMultiSelected
@@ -1881,23 +1881,23 @@ const SpotCardItem: React.FC<SpotCardItemProps> = ({
           e.stopPropagation();
           onToggleMultiSelect(spot.id);
         }}
-        className={`p-1 rounded-md mt-3 transition-colors cursor-pointer flex flex-col items-center gap-0.5 ${
+        className={`p-1 rounded-md mt-2 transition-colors cursor-pointer flex flex-col items-center gap-0.5 ${
           isMultiSelected ? 'text-emerald-700 bg-emerald-100/90 border border-emerald-300' : 'text-slate-300 hover:text-emerald-600'
         }`}
         title="ピン同士の下道ルート対象に追加/解除"
       >
         {hasOrderBadge ? (
-          <span className="w-4 h-4 rounded-full bg-emerald-700 text-white text-[9px] font-black flex items-center justify-center shadow-2xs">
+          <span className="w-3.5 h-3.5 rounded-full bg-emerald-700 text-white text-[8px] font-black flex items-center justify-center shadow-2xs">
             {(orderIndex ?? 0) + 1}
           </span>
         ) : isMultiSelected ? (
-          <CheckSquare className="w-4 h-4 text-emerald-700" />
+          <CheckSquare className="w-3.5 h-3.5 text-emerald-700" />
         ) : (
-          <Square className="w-4 h-4" />
+          <Square className="w-3.5 h-3.5" />
         )}
       </button>
 
-      <div className="relative flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden bg-slate-100 border border-slate-200">
+      <div className="relative flex-shrink-0 w-13 h-13 min-w-[52px] min-h-[52px] max-w-[52px] max-h-[52px] rounded-lg overflow-hidden bg-slate-100 border border-slate-200">
         {hasCoverPhoto ? (
           <img
             src={coverPhoto.url}
@@ -1912,28 +1912,29 @@ const SpotCardItem: React.FC<SpotCardItemProps> = ({
             }}
             title={mainCat.label || categoryInfo.label}
           >
-            <span className="text-3xl drop-shadow-2xs leading-none">
+            <span className="text-2xl drop-shadow-2xs leading-none">
               {mainCat.icon || categoryInfo.icon || '👻'}
             </span>
           </div>
         )}
         {photoCount > 1 && (
-          <span className="absolute bottom-1 right-1 bg-black/75 text-white text-[9px] font-bold px-1 py-0.5 rounded shadow">
-            📷{photoCount}枚
+          <span className="absolute bottom-0.5 right-0.5 bg-black/75 text-white text-[8px] font-bold px-1 py-0.2 rounded shadow">
+            📷{photoCount}
           </span>
         )}
       </div>
 
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5 flex-wrap">
+        <div className="flex items-center gap-1 flex-wrap">
           {Array.from(new Set(spot.categories && spot.categories.length > 0 ? spot.categories : [spot.category]))
             .map((catId) => getCategoryDisplay(catId, categories))
             .filter((cInfo) => cInfo && cInfo.label && cInfo.label !== 'カスタム' && cInfo.id !== 'custom')
+            .slice(0, 3)
             .map((cInfo, cIdx) => {
               return (
                 <span
                   key={`${cInfo.id || 'cat'}_${cIdx}`}
-                  className="text-[10px] font-bold px-1.5 py-0.5 rounded text-white shadow-2xs flex items-center gap-1"
+                  className="text-[9px] font-bold px-1.5 py-0.5 rounded text-white shadow-2xs flex items-center gap-0.5 leading-tight"
                   style={{ backgroundColor: cInfo.color }}
                 >
                   <span>{cInfo.icon}</span>
@@ -1942,25 +1943,25 @@ const SpotCardItem: React.FC<SpotCardItemProps> = ({
               );
             })}
           {spot.prefecture && (
-            <span className="text-[10px] text-slate-600 font-bold">
+            <span className="text-[9.5px] text-slate-600 font-bold truncate">
               {spot.prefecture}
             </span>
           )}
           {refCount > 0 && (
-            <span className="text-[10px] text-violet-600 font-medium ml-auto flex items-center gap-0.5">
+            <span className="text-[9px] text-violet-600 font-medium ml-auto flex items-center gap-0.5">
               <ExternalLink className="w-2.5 h-2.5" />
               <span>URL {refCount}件</span>
             </span>
           )}
         </div>
 
-        <div className="flex items-center justify-between gap-1 mt-1">
-          <div className="min-w-0">
-            <h3 className="text-xs font-bold text-slate-900 truncate">
+        <div className="flex items-center justify-between gap-1 mt-0.5">
+          <div className="min-w-0 flex-1">
+            <h3 className="text-xs font-bold text-slate-900 truncate leading-snug">
               {spot.title}
             </h3>
             {spot.yomigana && (
-              <span className="text-[10px] text-slate-400 font-medium truncate block">
+              <span className="text-[9.5px] text-slate-400 font-medium truncate block leading-tight">
                 {spot.yomigana}
               </span>
             )}
@@ -1972,40 +1973,39 @@ const SpotCardItem: React.FC<SpotCardItemProps> = ({
                 e.stopPropagation();
                 onDeleteSpot(spot);
               }}
-              className="flex-shrink-0 px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1 bg-rose-50 text-rose-700 hover:bg-rose-100 hover:text-rose-800 border border-rose-200 transition-colors cursor-pointer shadow-2xs"
-              title="このスポットを登録から削除"
+              className="flex-shrink-0 p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition-colors cursor-pointer"
+              title="このスポットをリストから削除"
             >
-              <Trash2 className="w-3 h-3 text-rose-600" />
-              <span>リストの削除</span>
+              <Trash2 className="w-3.5 h-3.5 text-rose-500" />
             </button>
           )}
         </div>
 
         {/* Local Road Info: Distance & Duration from user location */}
         {isLocationEnabled && routeInfo && routeInfo.status === 'success' ? (
-          <div className="flex items-center gap-2 mt-1 text-[11px] bg-violet-50/80 px-2 py-0.5 rounded-md border border-violet-100 text-violet-900 font-bold">
-            <Car className="w-3 h-3 text-violet-600 flex-shrink-0" />
+          <div className="flex items-center gap-1.5 mt-0.5 text-[10px] bg-violet-50/80 px-1.5 py-0.5 rounded border border-violet-100 text-violet-900 font-bold">
+            <Car className="w-2.5 h-2.5 text-violet-600 flex-shrink-0" />
             <span>最短下道: {formatDistanceJapanese(routeInfo.distanceKm)}</span>
             <span className="text-slate-400">•</span>
             <span className="text-violet-700">約 {formatDurationJapanese(routeInfo.durationMinutes)}</span>
           </div>
         ) : spot.notes ? (
-          <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">
+          <p className="text-[10px] text-slate-500 line-clamp-1 mt-0.5">
             {spot.notes}
           </p>
         ) : null}
 
         {/* Bottom Actions: Rating & Want-to-go / Haunted list buttons */}
-        <div className="flex items-center justify-between gap-2 mt-2 pt-1 border-t border-slate-100 text-[10px] text-slate-400">
-          <div className="flex items-center gap-1.5 flex-wrap">
+        <div className="flex items-center justify-between gap-1 mt-1.5 pt-1 border-t border-slate-100 text-[9px] text-slate-400 flex-wrap">
+          <div className="flex items-center gap-1 flex-wrap">
             {spot.rating !== undefined && spot.rating !== null && Number(spot.rating) > 0 ? (
-              <div className="flex items-center gap-1 text-amber-700 font-bold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/60 shadow-2xs">
-                <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+              <div className="flex items-center gap-0.5 text-amber-700 font-bold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/60 shadow-2xs text-[9px]">
+                <Star className="w-2.5 h-2.5 fill-amber-400 text-amber-400" />
                 <span>★ {Number(spot.rating).toFixed(1)}</span>
               </div>
             ) : (
-              <div className="flex items-center gap-1 text-slate-400 font-medium bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200/60 shadow-2xs">
-                <Star className="w-3 h-3 text-slate-300" />
+              <div className="flex items-center gap-0.5 text-slate-400 font-medium bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200/60 shadow-2xs text-[9px]">
+                <Star className="w-2.5 h-2.5 text-slate-300" />
                 <span>未評価</span>
               </div>
             )}
@@ -2017,7 +2017,7 @@ const SpotCardItem: React.FC<SpotCardItemProps> = ({
                   e.stopPropagation();
                   onToggleWantToGo(spot.id);
                 }}
-                className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-0.5 transition-colors cursor-pointer ${
+                className={`px-1.5 py-0.5 rounded text-[9px] font-bold flex items-center gap-0.5 transition-colors cursor-pointer ${
                   spot.isWantToGo
                     ? 'bg-amber-100 text-amber-900 border border-amber-300'
                     : 'bg-slate-100 text-slate-500 hover:text-amber-800 hover:bg-amber-50'
@@ -2036,7 +2036,7 @@ const SpotCardItem: React.FC<SpotCardItemProps> = ({
                   e.stopPropagation();
                   onToggleHaunted(spot.id);
                 }}
-                className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-0.5 transition-colors cursor-pointer ${
+                className={`px-1.5 py-0.5 rounded text-[9px] font-bold flex items-center gap-0.5 transition-colors cursor-pointer ${
                   isHauntedChecked
                     ? 'bg-violet-100 text-violet-900 border border-violet-300'
                     : 'bg-slate-100 text-slate-500 hover:text-violet-800 hover:bg-violet-50'
@@ -2044,7 +2044,7 @@ const SpotCardItem: React.FC<SpotCardItemProps> = ({
                 title={isHauntedChecked ? '「心リスト」から解除' : '「心リスト」に追加'}
               >
                 <Ghost className="w-2.5 h-2.5 text-violet-600" />
-                <span>{isHauntedChecked ? '心リスト' : '+心リスト'}</span>
+                <span>{isHauntedChecked ? '心リスト' : '+心'}</span>
               </button>
             )}
 
@@ -2055,7 +2055,7 @@ const SpotCardItem: React.FC<SpotCardItemProps> = ({
                   e.stopPropagation();
                   onOpenListManager(spot.id);
                 }}
-                className="px-1.5 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-0.5 bg-slate-100 text-slate-600 hover:text-violet-700 hover:bg-violet-50 border border-slate-200 transition-colors cursor-pointer"
+                className="px-1.5 py-0.5 rounded text-[9px] font-bold flex items-center gap-0.5 bg-slate-100 text-slate-600 hover:text-violet-700 hover:bg-violet-50 border border-slate-200 transition-colors cursor-pointer"
                 title="所属リストの管理・登録・解除"
               >
                 <span>📋</span>
@@ -2070,7 +2070,7 @@ const SpotCardItem: React.FC<SpotCardItemProps> = ({
                   e.stopPropagation();
                   onEditSpot(spot);
                 }}
-                className="px-2 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1 bg-violet-50 text-violet-700 hover:bg-violet-100 border border-violet-200 transition-colors cursor-pointer shadow-2xs"
+                className="px-1.5 py-0.5 rounded text-[9px] font-bold flex items-center gap-0.5 bg-violet-50 text-violet-700 hover:bg-violet-100 border border-violet-200 transition-colors cursor-pointer shadow-2xs"
                 title="スポット内容を編集"
               >
                 <Edit3 className="w-2.5 h-2.5 text-violet-600" />
