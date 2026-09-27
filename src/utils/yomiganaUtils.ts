@@ -161,16 +161,17 @@ export async function generateYomigana(title: string, address?: string): Promise
 
   // 2. Try server API (uses Gemini AI / server morphizer)
   try {
-    const res = await fetch('/api/generate-yomigana', {
+    const endpoint = typeof window !== 'undefined' ? '/api/generate-reading' : 'http://localhost:3000/api/generate-reading';
+    const res = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text: clean, context: address }),
     });
     if (res.ok) {
       const data = await res.json();
-      if (data && data.yomigana && typeof data.yomigana === 'string') {
-        const result = data.yomigana.trim();
-        if (result) return result;
+      const val = data.reading || data.yomigana;
+      if (val && typeof val === 'string' && val.trim()) {
+        return val.trim();
       }
     }
   } catch (err) {

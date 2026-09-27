@@ -1227,6 +1227,7 @@ export default function App() {
       const q = mobileSearchQuery.trim().toLowerCase();
       result = result.filter((s) => {
         const title = (s.title || '').toLowerCase();
+        const yomi = (s.yomigana || '').toLowerCase();
         const addr = (s.address || '').toLowerCase();
         const pref = (s.prefecture || '').toLowerCase();
         const city = (s.city || '').toLowerCase();
@@ -1234,6 +1235,7 @@ export default function App() {
         const notes = (s.notes || '').toLowerCase();
         return (
           title.includes(q) ||
+          yomi.includes(q) ||
           addr.includes(q) ||
           pref.includes(q) ||
           city.includes(q) ||

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { parseAndResolveMapInput, extractPrefectureFromAddress, isValidLatLng } from '../utils/mapParser';
+import { generateYomigana } from '../utils/yomiganaUtils';
 import { Spot, CustomCategory } from '../types';
 import { Link2, MapPin, Search, Loader2, Sparkles, Plus, Check, ArrowRight } from 'lucide-react';
 
@@ -44,8 +45,18 @@ export const QuickPinBar: React.FC<QuickPinBarProps> = ({
       // 選択中のカテゴリ（デフォルト: ユーザー指定カテゴリ）
       const targetCategory = selectedCategory || categories[0]?.id || 'haunted';
 
+      // 読み仮名の自動生成・保管
+      let yomigana: string | undefined = undefined;
+      try {
+        const yomi = await generateYomigana(title, address);
+        if (yomi) yomigana = yomi;
+      } catch {
+        // ignore
+      }
+
       const newSpotData: Omit<Spot, 'id' | 'createdAt' | 'updatedAt'> = {
         title,
+        yomigana,
         lat: targetLat,
         lng: targetLng,
         address,

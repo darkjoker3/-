@@ -11,6 +11,7 @@ import {
 } from '../utils/mapParser';
 import { processImageFile, createPhotoObject } from '../utils/imageUtils';
 import { JAPAN_PREFECTURES, INITIAL_CATEGORIES, PREFECTURE_CENTERS } from '../data/sampleSpots';
+import { generateYomigana } from '../utils/yomiganaUtils';
 import {
   X,
   Link,
@@ -218,32 +219,60 @@ export const SpotFormModal: React.FC<SpotFormModalProps> = ({
   }, []);
 
   // Gemini AI による読み仮名の自動生成・補完
-  const handleFetchReading = async (targetTitle?: string, isAuto = false) => {
+  const handleFetchReading = async (targetTitle?: string, isAuto = false): Promise<string> => {
     const textToRead = (targetTitle !== undefined ? targetTitle : title).trim();
-    if (!textToRead) return;
+    if (!textToRead) {
+      if (!isAuto) {
+        setFormError('読み仮名を自動補完するにはスポット名を入力してください');
+        setTimeout(() => setFormError(null), 3000);
+      }
+      return '';
+    }
 
     setIsGeneratingReading(true);
     try {
       const res = await fetch('/api/generate-reading', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: textToRead }),
+        body: JSON.stringify({ text: textToRead, context: address }),
       });
       if (res.ok) {
         const data = await res.json();
-        if (data.success && data.reading) {
-          setYomigana(data.reading);
-          setReadingBadge('✨ AI自動補完');
+        const reading = data.reading || data.yomigana;
+        if (data.success && reading) {
+          setYomigana(reading);
+          setReadingBadge(data.source === 'gemini' ? '✨ Gemini AI補完' : '✨ 自動補完');
           if (!isAuto) {
             setIsManualYomigana(false);
           }
+          return reading;
         }
       }
+      // サーバーAPIが応答しない・エラーの場合はローカル辞書から即座にフォールバック
+      const fallbackReading = await generateYomigana(textToRead, address);
+      if (fallbackReading) {
+        setYomigana(fallbackReading);
+        setReadingBadge('✨ 自動補完');
+        if (!isAuto) {
+          setIsManualYomigana(false);
+        }
+        return fallbackReading;
+      }
     } catch (err) {
-      console.warn('Failed to fetch reading from Gemini API:', err);
+      console.warn('Failed to fetch reading from Gemini API, using fallback:', err);
+      const fallbackReading = await generateYomigana(textToRead, address);
+      if (fallbackReading) {
+        setYomigana(fallbackReading);
+        setReadingBadge('✨ 自動補完');
+        if (!isAuto) {
+          setIsManualYomigana(false);
+        }
+        return fallbackReading;
+      }
     } finally {
       setIsGeneratingReading(false);
     }
+    return '';
   };
 
   // ブラウザ日本語IME入力情報の追跡・変換処理
@@ -277,6 +306,16 @@ export const SpotFormModal: React.FC<SpotFormModalProps> = ({
       setReadingBadge('⌨️ 入力変換補完');
     }
     compositionKanaBufferRef.current = '';
+
+    // IME変換確定後、最新のスポット名に基づきAI自動補完をスケジュール（より高精度な完全な読み仮名で上書き）
+    if (!isManualYomigana && title.trim().length >= 2) {
+      if (autoReadingTimeoutRef.current) {
+        clearTimeout(autoReadingTimeoutRef.current);
+      }
+      autoReadingTimeoutRef.current = setTimeout(() => {
+        handleFetchReading(title, true);
+      }, 700);
+    }
   };
 
   // スポット名入力変更時のハンドラ（デバウンスでGemini自動補完も連動）
@@ -294,18 +333,18 @@ export const SpotFormModal: React.FC<SpotFormModalProps> = ({
       clearTimeout(autoReadingTimeoutRef.current);
     }
 
-    // 手動入力済みでなく、読み仮名が空で、文字数が2文字以上の場合、入力停止後に自動補完
-    if (!isManualYomigana && !yomigana.trim() && newTitle.trim().length >= 2) {
+    // ユーザー自身が読み仮名欄を手動編集していない場合、入力停止後（700ms後）に自動補完
+    if (!isManualYomigana && newTitle.trim().length >= 2) {
       autoReadingTimeoutRef.current = setTimeout(() => {
         if (!isComposingRef.current) {
           handleFetchReading(newTitle, true);
         }
-      }, 1000);
+      }, 700);
     }
   };
 
   const handleTitleBlur = () => {
-    if (!isManualYomigana && !yomigana.trim() && title.trim().length >= 2) {
+    if (!isManualYomigana && title.trim().length >= 2) {
       handleFetchReading(title, true);
     }
   };
@@ -547,7 +586,7 @@ export const SpotFormModal: React.FC<SpotFormModalProps> = ({
   };
 
   // Submit Handler
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!title.trim()) {
@@ -555,6 +594,16 @@ export const SpotFormModal: React.FC<SpotFormModalProps> = ({
       return;
     }
     setFormError(null);
+
+    // 読み仮名が空の場合、自動生成して確実に保管（自動保管の保証）
+    let finalYomigana = yomigana.trim();
+    if (!finalYomigana) {
+      try {
+        finalYomigana = await generateYomigana(title.trim(), address);
+      } catch {
+        // ignore
+      }
+    }
 
     // 座標が未設定の場合でも、都道府県または日本の中心座標でピン位置を自動補完
     let finalLat = lat;
@@ -585,7 +634,7 @@ export const SpotFormModal: React.FC<SpotFormModalProps> = ({
     onSave(
       {
         title: title.trim(),
-        yomigana: yomigana.trim() || undefined,
+        yomigana: finalYomigana || undefined,
         lat: finalLat,
         lng: finalLng,
         address: address.trim() || undefined,

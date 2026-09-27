@@ -459,98 +459,203 @@ async function startServer() {
     }
   });
 
-  // API 3: スポット名読み仮名（ふりがな）自動生成 API (Gemini AI)
-  app.post('/api/generate-reading', async (req, res) => {
-    try {
-      const text = (req.body?.text as string || '').trim();
-      if (!text) {
-        res.status(400).json({ success: false, error: 'スポット名（text）が指定されていません', reading: '' });
-        return;
-      }
+  // API 3: スポット名読み仮名（ふりがな）自動生成 API (Gemini AI & 高精度フォールバック)
+  const handleReadingRequest = async (req: express.Request, res: express.Response) => {
+    const rawText = (req.body?.text || req.body?.title || req.query.text || '').toString().trim();
+    const context = (req.body?.context || req.body?.address || req.query.context || '').toString().trim();
 
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) {
-        console.warn('GEMINI_API_KEY is not configured on server');
-        res.status(503).json({ success: false, error: 'GEMINI_API_KEYが設定されていません', reading: '' });
-        return;
-      }
+    if (!rawText) {
+      res.status(400).json({ success: false, error: 'スポット名（text）が指定されていません', reading: '', yomigana: '' });
+      return;
+    }
 
-      const ai = new GoogleGenAI({
-        apiKey,
-        httpOptions: {
-          headers: {
-            'User-Agent': 'aistudio-build',
+    // クリーンアップ：英語の括弧表記や余分な空白を除去
+    let cleanText = rawText
+      .replace(/\([A-Za-z0-9\s.,'_-]+\)/g, '')
+      .replace(/（[A-Za-z0-9\s.,'_-]+）/g, '')
+      .trim();
+
+    const apiKey = process.env.GEMINI_API_KEY;
+
+    if (apiKey) {
+      try {
+        const ai = new GoogleGenAI({
+          apiKey,
+          httpOptions: {
+            headers: {
+              'User-Agent': 'aistudio-build',
+            },
           },
-        },
-      });
+        });
 
-      let rawReading = '';
-      const modelsToTry = ['gemini-3.8-flash', 'gemini-3.6-flash'];
-      let lastError: any = null;
+        // 準拠モデル順: gemini-3.8-flash -> gemini-flash-latest -> gemini-3.1-flash-lite
+        const modelsToTry = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.1-flash-lite'];
+        let rawReading = '';
 
-      for (const model of modelsToTry) {
-        try {
-          const response = await ai.models.generateContent({
-            model,
-            contents: `日本の場所名・観光地・地名・施設名・心霊スポット「${text}」の正確な読み仮名（ひらがな）のみを出力してください。
+        for (const model of modelsToTry) {
+          try {
+            const response = await ai.models.generateContent({
+              model,
+              contents: `スポット名: "${cleanText}"${context ? `\n所在地・地域: "${context}"` : ''}`,
+              config: {
+                systemInstruction: `あなたは日本の地名・施設名・観光地・心霊スポット・建造物の正確な「読み仮名（ひらがな）」を判定する専門AIです。
+入力されたスポット名の正確な読み仮名を、ひらがな（および長音記号「ー」）のみで出力してください。
+【厳格な指示】
+1. 前置き、解説、「読み仮名は〜です」などの文章、挨拶、引用符、括弧、記号、漢字、英語は一切含めないでください。
+2. 純粋なひらがな（長音符「ー」含む）の文字列のみを1行で出力してください。
 例:
 - 犬鳴峠 -> いぬなきとうげ
-- 吹上トンネル -> ふきあげとんねる
+- 旧犬鳴トンネル -> きゅういぬなきとんねる
 - 八木山橋 -> やぎやまばし
+- 吹上トンネル -> ふきあげとんねる
 - 慰霊の森 -> いれいのもり
 - 富士山 -> ふじさん
 - 清水寺 -> きよみずでら
 - 雄蛇ヶ池 -> おじゃがいけ
-- 旧善波トンネル -> きゅうぜんばとんねる
+- 勝坂隧道 -> かっさかずいどう
+- 信州観光ホテル跡 -> しんしゅうかんこうほてるあと`,
+                temperature: 0.1,
+              },
+            });
 
-【厳格なルール】
-1. ひらがな（および長音記号「ー」）のみを出力してください。
-2. 漢字・カタカナ・アルファベット・スペース・説明文・引用符・記号は一切含めず、ひらがな文字列のみを返してください。`,
-            config: {
-              thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-            },
-          });
-          if (response.text) {
-            rawReading = response.text.trim();
-            break;
+            if (response.text) {
+              rawReading = response.text.trim();
+              if (rawReading) break;
+            }
+          } catch (modelErr) {
+            console.warn(`[Gemini Yomigana] Model ${model} failed, trying next:`, modelErr);
           }
-        } catch (err) {
-          lastError = err;
-          console.warn(`Model ${model} failed, trying fallback:`, err);
         }
-      }
 
-      if (!rawReading && lastError) {
-        throw lastError;
-      }
-      // ひらがな・長音符を抽出して正規化
-      let cleaned = rawReading
-        .replace(/[\r\n\t]/g, '')
-        .replace(/[^\u3041-\u3096ー]/g, '')
-        .trim();
+        if (rawReading) {
+          // 「」や『』で括られている場合は抽出
+          const quoteMatch = rawReading.match(/[「『]([^」』]+)[」』]/);
+          let candidate = quoteMatch ? quoteMatch[1] : rawReading;
 
-      // カタカナで返された場合はひらがなに変換
-      if (!cleaned && rawReading) {
-        cleaned = rawReading
-          .replace(/[\u30a1-\u30f6]/g, (m) => String.fromCharCode(m.charCodeAt(0) - 0x60))
-          .replace(/[^\u3041-\u3096ー]/g, '')
-          .trim();
-      }
+          // 説明的な文言を除去（例：「〜の読み仮名は...です」等）
+          candidate = candidate
+            .replace(/^.*?(?:読み仮名|よみがな|読み|ふりがな)は[：:\s]*/i, '')
+            .replace(/[で居]す[。.]*$/i, '')
+            .replace(/[（(][^）)]*[）)]/g, '')
+            .trim();
 
-      res.json({
-        success: true,
-        reading: cleaned,
-      });
-    } catch (err) {
-      console.error('Failed to generate reading via Gemini:', err);
-      res.status(500).json({
-        success: false,
-        error: '読み仮名の生成に失敗しました',
-        details: String(err),
-        reading: '',
-      });
+          // カタカナをひらがなに変換
+          candidate = candidate.replace(/[\u30a1-\u30f6]/g, (m) =>
+            String.fromCharCode(m.charCodeAt(0) - 0x60)
+          );
+
+          // ひらがなと長音記号のみを抽出
+          const cleaned = candidate.replace(/[^\u3041-\u3096ー]/g, '').trim();
+
+          if (cleaned.length > 0) {
+            res.json({
+              success: true,
+              reading: cleaned,
+              yomigana: cleaned,
+              source: 'gemini',
+            });
+            return;
+          }
+        }
+      } catch (geminiErr) {
+        console.warn('[Gemini Yomigana] Gemini generation failed, using dictionary fallback:', geminiErr);
+      }
+    } else {
+      console.warn('[Gemini Yomigana] GEMINI_API_KEY is not set in environment, using dictionary fallback');
     }
-  });
+
+    // 辞書・ルールベース高精度フォールバック
+    const fallback = resolveServerOfflineYomigana(cleanText);
+    res.json({
+      success: true,
+      reading: fallback,
+      yomigana: fallback,
+      source: 'dictionary_fallback',
+    });
+  };
+
+  // ルールベース・オフライン読み仮名フォールバック
+  function resolveServerOfflineYomigana(title: string): string {
+    const FAMOUS: Record<string, string> = {
+      旧犬鳴トンネル: 'きゅういぬなきとんねる',
+      犬鳴トンネル: 'いぬなきとんねる',
+      犬鳴峠: 'いぬなきとうげ',
+      八木山橋: 'やぎやまばし',
+      信州観光ホテル跡: 'しんしゅうかんこうほてるあと',
+      信州観光ホテル: 'しんしゅうかんこうほてる',
+      清滝トンネル: 'きよたきとんねる',
+      旧小峰トンネル: 'きゅうこみねとんねる',
+      小峰トンネル: 'こみねとんねる',
+      滝尾神社: 'たきのおじんじゃ',
+      雄蛇ヶ池: 'おじゃがいけ',
+      青木ヶ原樹海: 'あおきがはらじゅかい',
+      富士樹海: 'ふじじゅかい',
+      慰霊の森: 'いれいのもり',
+      常紋トンネル: 'じょうもんとんねる',
+      白高大神: 'しらたかおおかみ',
+      恐山: 'おそれざん',
+      東尋坊: 'とうじんぼう',
+      三段壁: 'さんだんぺき',
+      首洗いの滝: 'くびあらいのたき',
+      首斬り峠: 'くびきりとうげ',
+      勝坂隧道: 'かっさかずいどう',
+      旧天城トンネル: 'きゅうあまぎとんねる',
+      天城トンネル: 'あまぎとんねる',
+      吹上トンネル: 'ふきあげとんねる',
+      旧吹上トンネル: 'きゅうふきあげとんねる',
+      深泥池: 'みどろがいけ',
+      千駄ヶ谷トンネル: 'せんだがやとんねる',
+      旧生越トンネル: 'きゅうおごせとんねる',
+      畑トンネル: 'はたとんねる',
+    };
+
+    for (const [key, val] of Object.entries(FAMOUS)) {
+      if (title.includes(key)) {
+        if (title === key) return val;
+        const sub = title.replace(key, '');
+        return val + sub.replace(/[\u30a1-\u30f6]/g, (m) => String.fromCharCode(m.charCodeAt(0) - 0x60));
+      }
+    }
+
+    const COMMON: Record<string, string> = {
+      旧: 'きゅう',
+      新: 'しん',
+      トンネル: 'とんねる',
+      隧道: 'ずいどう',
+      峠: 'とうげ',
+      橋: 'ばし',
+      滝: 'たき',
+      神社: 'じんじゃ',
+      寺: 'てら',
+      城: 'じょう',
+      跡: 'あと',
+      廃墟: 'はいきょ',
+      病院: 'びょういん',
+      ホテル: 'ほてる',
+      公園: 'こうえん',
+      山: 'やま',
+      川: 'かわ',
+      湖: 'こ',
+      池: 'いけ',
+      森: 'もり',
+      岩: 'いわ',
+      島: 'しま',
+      海: 'うみ',
+      道: 'どう',
+    };
+
+    let converted = title;
+    for (const [k, v] of Object.entries(COMMON)) {
+      converted = converted.split(k).join(v);
+    }
+    return converted
+      .replace(/[\u30a1-\u30f6]/g, (m) => String.fromCharCode(m.charCodeAt(0) - 0x60))
+      .replace(/[^\u3041-\u3096ー]/g, '');
+  }
+
+  // 読み仮名エンドポイント（/api/generate-reading & /api/generate-yomigana の両方に対応）
+  app.post('/api/generate-reading', handleReadingRequest);
+  app.post('/api/generate-yomigana', handleReadingRequest);
 
   // Health check
   app.get('/api/health', (req, res) => {
