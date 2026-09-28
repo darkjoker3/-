@@ -314,20 +314,20 @@ export default function App() {
     };
   }, [isSidebarOpen, layoutMode]);
 
-  // UI Display Scale (Standard default: 100%)
-  const [uiScale, setUiScale] = useState<'75' | '85' | '100'>(() => {
+  // UI Display Scale (Standard default: 100% optimized for Full HD 1920x1080)
+  const [uiScale, setUiScale] = useState<'75' | '85' | '100' | '115'>(() => {
     try {
       const stored = localStorage.getItem('japan_map_ui_scale_v1');
-      if (stored === '75' || stored === '85' || stored === '100') {
+      if (stored === '75' || stored === '85' || stored === '100' || stored === '115') {
         return stored;
       }
     } catch (e) {
       console.error(e);
     }
-    return '100'; // 標準の大きさを100%（16px基準）にする
+    return '100'; // フルHD標準の大きさ (100%)
   });
 
-  const handleSetUiScale = useCallback((scale: '75' | '85' | '100') => {
+  const handleSetUiScale = useCallback((scale: '75' | '85' | '100' | '115') => {
     setUiScale(scale);
     try {
       localStorage.setItem('japan_map_ui_scale_v1', scale);
@@ -335,7 +335,7 @@ export default function App() {
       console.error(e);
     }
     document.documentElement.setAttribute('data-ui-scale', scale);
-    showToast(`表示サイズを ${scale}% ${scale === '100' ? '（標準）' : ''}に変更しました`, 'info');
+    showToast(`表示サイズを ${scale}% ${scale === '100' ? '（フルHD標準）' : ''}に変更しました`, 'info');
     setTimeout(() => {
       window.dispatchEvent(new Event('resize'));
     }, 50);
@@ -1689,7 +1689,7 @@ export default function App() {
         <>
           {/* Top Application Header */}
           <header className="h-14 bg-white border-b border-slate-200 z-30 flex-shrink-0 shadow-xs w-full">
-            <div className="w-full max-w-[1920px] mx-auto px-2 sm:px-4 h-full flex items-center justify-between gap-2">
+            <div className="w-full max-w-full mx-auto px-2 sm:px-4 h-full flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 sm:gap-3">
                 {/* Sidebar Toggle Button (PC / Tablet) */}
                 <button
@@ -1887,10 +1887,10 @@ export default function App() {
                 <div
                   id="ui-scale-selector"
                   className="bg-slate-100 p-0.5 rounded-xl flex items-center border border-slate-200 text-xs font-medium"
-                  title="全体の表示サイズ切り替え"
+                  title="全体の表示サイズ切り替え（フルHD 1920x1080 標準）"
                 >
                   <span className="px-1.5 text-[10px] text-slate-500 font-bold hidden xl:inline">表示倍率:</span>
-                  {(['75', '85', '100'] as const).map((scale) => (
+                  {(['75', '85', '100', '115'] as const).map((scale) => (
                     <button
                       key={scale}
                       type="button"
@@ -1900,11 +1900,11 @@ export default function App() {
                           ? 'bg-white text-violet-700 shadow-2xs'
                           : 'text-slate-500 hover:text-slate-800'
                       }`}
-                      title={`画面全体の表示倍率を${scale}%${scale === '100' ? '（標準）' : ''}に変更`}
+                      title={`画面全体の表示倍率を${scale}%${scale === '100' ? '（フルHD標準）' : ''}に変更`}
                     >
                       <span>{scale}%</span>
                       {scale === '100' && (
-                        <span className="text-[10px] text-violet-500 font-normal hidden md:inline">
+                        <span className="text-[10px] text-violet-600 font-bold hidden md:inline">
                           (標準)
                         </span>
                       )}
@@ -1946,7 +1946,7 @@ export default function App() {
 
           {/* Quick Pin Action Bar */}
           <div className="bg-slate-50/95 border-b border-slate-200 px-2 sm:px-4 py-1.5 shadow-2xs z-10 w-full flex-shrink-0">
-            <div className="w-full max-w-[1920px] mx-auto flex items-center justify-between gap-3">
+            <div className="w-full max-w-full mx-auto flex items-center justify-between gap-3">
               <div className="flex-1 max-w-full sm:max-w-2xl">
                 <QuickPinBar
                   categories={categories}
@@ -1964,7 +1964,7 @@ export default function App() {
 
           {/* Main Container: Dynamic Side vs Bottom Layout */}
           <div className="relative flex-1 flex flex-col overflow-hidden pb-14 sm:pb-0 w-full">
-            <div className="w-full max-w-[1920px] mx-auto flex-1 flex flex-col overflow-hidden h-full">
+            <div className="w-full max-w-full mx-auto flex-1 flex flex-col overflow-hidden h-full">
               {layoutMode === 'side' ? (
                 /* ================= SIDE-BY-SIDE ON PC ================= */
                 <div className="relative flex-1 flex flex-col md:flex-row overflow-hidden h-full w-full">
@@ -1972,7 +1972,7 @@ export default function App() {
                     id="main-spot-list"
                     className={`order-2 md:order-1 transition-all duration-300 ease-in-out flex-shrink-0 bg-white ${
                       isSidebarOpen
-                        ? 'w-full md:w-[42%] lg:w-[36%] xl:w-[32%] 2xl:w-[28%] max-w-full md:max-w-[600px] min-w-0 md:min-w-[320px] flex-1 md:flex-initial h-auto md:h-full overflow-hidden'
+                        ? 'w-full md:w-[42%] lg:w-[35%] xl:w-[30%] 2xl:w-[26%] max-w-full md:max-w-[540px] min-w-0 md:min-w-[320px] flex-1 md:flex-initial h-auto md:h-full overflow-hidden'
                         : 'hidden md:hidden'
                     }`}
                   >

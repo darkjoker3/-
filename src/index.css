@@ -2,10 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
-/* レスポンシブ標準フォントサイズ (16px) & テキスト自動調整 */
+/* フルHD (1920x1080) 標準サイズ最適化 & テキスト自動調整 */
 :root,
 html {
-  font-size: 16px;
+  font-size: 14px; /* フルHD(1920x1080)基準の標準サイズ */
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
   box-sizing: border-box;
@@ -26,16 +26,40 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* フルHD (1920x1080) およびデスクトップ表示の標準サイズ */
+@media screen and (min-width: 1024px) {
+  :root,
+  html {
+    font-size: 14px; /* フルHD標準サイズ */
+  }
+}
+
+/* UI表示スケール切り替え（100% = フルHD標準 14px） */
 html[data-ui-scale="75"] {
-  font-size: 13.5px;
+  font-size: 11.5px;
 }
 
 html[data-ui-scale="85"] {
-  font-size: 14.5px;
+  font-size: 12.8px;
 }
 
 html[data-ui-scale="100"] {
-  font-size: 16px;
+  font-size: 14px; /* フルHD標準 */
+}
+
+html[data-ui-scale="115"] {
+  font-size: 15.5px; /* 拡大表示 */
+}
+
+/* モバイル表示時のフォントサイズ調整 */
+@media screen and (max-width: 768px) {
+  :root,
+  html {
+    font-size: 15px;
+  }
+  html[data-ui-scale="100"] {
+    font-size: 15px;
+  }
 }
 
 /* iOS Safari & Chrome モバイルフォーム自動ズーム防止 */

@@ -1405,7 +1405,13 @@ export const SpotListSidebar: React.FC<SpotListSidebarProps> = ({
 
                   {/* Spot Cards inside this prefecture */}
                   {!isCollapsed && (
-                    <div className="divide-y divide-slate-100">
+                    <div
+                      className={
+                        isBottomLayout
+                          ? 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-2.5 p-2.5'
+                          : 'divide-y divide-slate-100'
+                      }
+                    >
                       {prefSpots.map((spot, sIdx) => (
                         <SpotCardItem
                           key={`${spot.id}_${sIdx}`}
@@ -1418,6 +1424,7 @@ export const SpotListSidebar: React.FC<SpotListSidebarProps> = ({
                           onClearSelection={onClearSelection}
                           onToggleWantToGo={onToggleWantToGo}
                           onToggleHaunted={onToggleHaunted}
+                          isGrid={isBottomLayout}
                           categories={categories}
                           routeInfo={routesInfo[spot.id]}
                           userLocation={userLocation}
@@ -1442,7 +1449,7 @@ export const SpotListSidebar: React.FC<SpotListSidebarProps> = ({
           <div
             className={
               isBottomLayout
-                ? 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 p-3'
+                ? 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-2.5 p-2.5'
                 : 'divide-y divide-slate-100 bg-white'
             }
           >
