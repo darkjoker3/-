@@ -27,11 +27,12 @@ import {
   Sparkles,
   ArrowRight,
   Radio,
+  MessageCircle,
 } from 'lucide-react';
 import { Spot, CustomCategory, CustomList } from '../types';
 import { CloudSyncData, DriveFileMeta, SYNC_FILE_NAME } from '../services/googleDriveService';
 import { formatSyncTimestamp, getDeviceId } from '../utils/cloudSyncManager';
-import { PasscodeRoomInfo, generateFriendlyPasscode } from '../services/passcodeSyncService';
+import { PasscodeRoomInfo, generateFriendlyPasscode, getShareablePasscodeUrl } from '../services/passcodeSyncService';
 
 interface CloudSyncModalProps {
   isOpen: boolean;
@@ -174,17 +175,43 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
     }
   };
 
-  // Copy shareable link for friend
+  // Copy shareable link for friend (Auto-converts ais-dev- to public ais-pre-)
   const handleCopyInviteLink = async (code: string) => {
     try {
-      const baseUrl = window.location.origin + window.location.pathname;
-      const shareUrl = `${baseUrl}?passcode=${encodeURIComponent(code)}`;
+      const shareUrl = getShareablePasscodeUrl(code);
       await navigator.clipboard.writeText(shareUrl);
       setCopiedLink(true);
-      setPasscodeMessage({ text: '友達用の招待リンクをクリップボードにコピーしました！LINE等で送信できます', type: 'success' });
-      setTimeout(() => setCopiedLink(false), 3000);
+      setPasscodeMessage({
+        text: '友達用の公開招待リンクをコピーしました！友達はログイン不要・Google認証画面（画像エラー）なしで開けます',
+        type: 'success',
+      });
+      setTimeout(() => setCopiedLink(false), 3500);
     } catch {
       setPasscodeMessage({ text: 'リンクのコピーに失敗しました', type: 'error' });
+    }
+  };
+
+  const handleShareToLine = (code: string) => {
+    const shareUrl = getShareablePasscodeUrl(code);
+    const text = `日本地図マップで合言葉「${code}」を共有しました！こちらのURLを開くと、あなたの追加したピンも僕のGoogleドライブに自動保存されます🗺️✨\n${shareUrl}`;
+    const lineUrl = `https://line.me/R/msg/text/?${encodeURIComponent(text)}`;
+    window.open(lineUrl, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleNativeShare = async (code: string) => {
+    const shareUrl = getShareablePasscodeUrl(code);
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: '日本地図マップ - 合言葉で共有',
+          text: `合言葉「${code}」で地図ピンを共有中！リンクから開いてそのままピンを追加できます（Googleログイン不要）`,
+          url: shareUrl,
+        });
+      } catch {
+        // user canceled share
+      }
+    } else {
+      handleCopyInviteLink(code);
     }
   };
 
@@ -733,17 +760,69 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
                           </button>
                         </div>
 
+                        {/* Public Share URL Input Box */}
+                        <div className="pt-3 space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <label className="text-[11px] font-bold text-slate-700 flex items-center gap-1.5">
+                              <Link2 className="w-3.5 h-3.5 text-indigo-600" />
+                              <span>友達用 公開招待リンク（ログイン不要）</span>
+                            </label>
+                            <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full font-bold border border-emerald-200">
+                              誰でも直接アクセス可能
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              type="text"
+                              readOnly
+                              value={getShareablePasscodeUrl(activePasscode)}
+                              onClick={(e) => (e.target as HTMLInputElement).select()}
+                              className="flex-1 px-3 py-2 text-xs font-mono bg-slate-50 text-slate-800 rounded-xl border border-slate-300 select-all focus:outline-none focus:ring-2 focus:ring-indigo-500 truncate"
+                              title="クリックして全選択"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleCopyInviteLink(activePasscode)}
+                              className="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1 cursor-pointer transition-all shadow-xs flex-shrink-0"
+                            >
+                              {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
+                              <span>{copiedLink ? '完了' : 'コピー'}</span>
+                            </button>
+                          </div>
+                        </div>
+
                         {/* Quick Action Share Buttons */}
-                        <div className="grid grid-cols-2 gap-2 pt-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2">
                           <button
                             type="button"
                             onClick={() => handleCopyInviteLink(activePasscode)}
-                            className="py-2.5 px-3 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-bold text-xs shadow-md shadow-indigo-500/20 flex items-center justify-center gap-1.5 cursor-pointer transition-all"
+                            className="py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs flex items-center justify-center gap-1.5 cursor-pointer transition-all"
                           >
-                            {copiedLink ? <Check className="w-4 h-4 text-emerald-300" /> : <Share2 className="w-4 h-4" />}
-                            <span>{copiedLink ? 'リンクコピー完了' : '招待リンクをコピー'}</span>
+                            {copiedLink ? <Check className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}
+                            <span>{copiedLink ? 'コピー完了' : 'URLをコピー'}</span>
                           </button>
 
+                          <button
+                            type="button"
+                            onClick={() => handleShareToLine(activePasscode)}
+                            className="py-2 px-3 rounded-xl bg-[#06C755] hover:bg-[#05b34c] text-white font-bold text-xs shadow-xs flex items-center justify-center gap-1.5 cursor-pointer transition-all"
+                            title="LINEアプリで友達に合言葉リンクを送信"
+                          >
+                            <MessageCircle className="w-4 h-4" />
+                            <span>LINEで送る</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleNativeShare(activePasscode)}
+                            className="py-2 px-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition-colors shadow-2xs"
+                          >
+                            <Share2 className="w-3.5 h-3.5 text-slate-600" />
+                            <span>共有メニュー</span>
+                          </button>
+                        </div>
+
+                        <div className="flex justify-end pt-1">
                           <button
                             type="button"
                             onClick={() => {
@@ -751,11 +830,24 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
                               handleOwnerEnablePasscode(newCode);
                             }}
                             disabled={isPasscodeLoading}
-                            className="py-2.5 px-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition-colors disabled:opacity-50"
+                            className="text-[11px] text-slate-500 hover:text-indigo-600 font-medium inline-flex items-center gap-1 cursor-pointer transition-colors"
                           >
-                            <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-                            <span>新しい合言葉を再発行</span>
+                            <Sparkles className="w-3 h-3 text-indigo-500" />
+                            <span>別の合言葉を再発行する</span>
                           </button>
+                        </div>
+
+                        {/* Explanatory Note preventing the 403 / Image issue */}
+                        <div className="p-3 bg-indigo-50/70 border border-indigo-200 rounded-xl text-xs text-indigo-950 flex items-start gap-2.5">
+                          <ShieldCheck className="w-4 h-4 text-indigo-600 flex-shrink-0 mt-0.5" />
+                          <div className="leading-relaxed space-y-0.5 text-[11px]">
+                            <p className="font-bold text-indigo-900">
+                              友達が開いたときに画像（403エラー・ログイン画面）になるのを防止済み
+                            </p>
+                            <p className="text-indigo-800/90">
+                              開発環境用の制限画面を避け、誰でも閲覧できる公開URL（<code>ais-pre-...</code>）を共有します。友達はGoogleログイン不要でそのままマップを開き、ピンを追加・保存できます。
+                            </p>
+                          </div>
                         </div>
                       </div>
                     ) : (

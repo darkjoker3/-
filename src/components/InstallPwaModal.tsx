@@ -53,7 +53,9 @@ export const InstallPwaModal: React.FC<InstallPwaModalProps> = ({
 
   if (!isOpen) return null;
 
-  const currentUrl = typeof window !== 'undefined' ? window.location.href : '';
+  const currentUrl = typeof window !== 'undefined'
+    ? window.location.href.replace('ais-dev-', 'ais-pre-')
+    : '';
 
   const handleCopyUrl = async () => {
     try {

@@ -56,6 +56,21 @@ export function normalizePasscode(code: string): string {
 }
 
 /**
+ * Convert any development or internal origin to the publicly accessible Shared App URL (ais-pre-),
+ * preventing friends from encountering Google Cloud 403 Forbidden or sign-in illustration screens.
+ */
+export function getShareablePasscodeUrl(code: string): string {
+  if (typeof window === 'undefined') return '';
+  let origin = window.location.origin;
+  if (origin.includes('ais-dev-')) {
+    origin = origin.replace('ais-dev-', 'ais-pre-');
+  }
+  const clean = normalizePasscode(code);
+  const path = window.location.pathname || '/';
+  return `${origin}${path}?passcode=${encodeURIComponent(clean)}`;
+}
+
+/**
  * Register or update passcode room from Owner side
  */
 export async function registerPasscodeRoom(params: {

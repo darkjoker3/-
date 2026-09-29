@@ -932,6 +932,32 @@ export default function App() {
     }
   }, []);
 
+  // Owner: keep passcode room primed on server with latest Google Drive token & file ID
+  useEffect(() => {
+    if (!activePasscode || !isPasscodeOwner || !currentUser) return;
+    const token = getAccessToken();
+    if (!token) return;
+
+    const syncRoom = async () => {
+      try {
+        const payload = createSyncPayload(spots, categories, customLists, {
+          uiScale,
+          isLocationEnabled,
+        });
+        await registerPasscodeRoom({
+          passcode: activePasscode,
+          ownerName: currentUser.displayName || currentUser.email || 'オーナー',
+          driveFileId: syncFileId || undefined,
+          driveAccessToken: token,
+          syncData: payload,
+        });
+      } catch (e) {
+        console.warn('Auto-register room token sync error:', e);
+      }
+    };
+    syncRoom();
+  }, [activePasscode, isPasscodeOwner, currentUser, hasToken, syncFileId]);
+
   // Debounced Auto-sync on data change (Google Drive または 合言葉経由で自動保存)
   const isInitialMount = useRef(true);
   useEffect(() => {
