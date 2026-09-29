@@ -1,5 +1,5 @@
 import React from 'react';
-import { CustomCategory } from '../types';
+import { CustomCategory, CustomList, SpotListTab } from '../types';
 import { JAPAN_PREFECTURES } from '../data/sampleSpots';
 import { CATEGORY_CONFIG } from '../data/categoryConfig';
 import { X, Search, Star, ChevronDown, RotateCcw, ListOrdered, Settings2 } from 'lucide-react';
@@ -24,6 +24,9 @@ interface FilterSearchModalProps {
   totalFilteredCount: number;
   onOpenCategoryManager?: () => void;
   onOpenListSettings?: () => void;
+  activeTab?: SpotListTab;
+  onSelectTab?: (tab: SpotListTab) => void;
+  customLists?: CustomList[];
 }
 
 export const FilterSearchModal: React.FC<FilterSearchModalProps> = ({
@@ -46,6 +49,9 @@ export const FilterSearchModal: React.FC<FilterSearchModalProps> = ({
   totalFilteredCount,
   onOpenCategoryManager,
   onOpenListSettings,
+  activeTab,
+  onSelectTab,
+  customLists,
 }) => {
   if (!isOpen) return null;
 
@@ -75,6 +81,65 @@ export const FilterSearchModal: React.FC<FilterSearchModalProps> = ({
 
         {/* Scrollable Form Body */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
+          {/* 表示リスト (タブ選択) */}
+          {onSelectTab && (
+            <div>
+              <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                表示リスト
+              </label>
+              <div className="flex flex-wrap gap-1.5 bg-slate-900 p-1.5 rounded-xl border border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => onSelectTab('all')}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                    !activeTab || activeTab === 'all'
+                      ? 'bg-violet-600 text-white shadow-xs'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                  }`}
+                >
+                  全リスト
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onSelectTab('want_to_go')}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                    activeTab === 'want_to_go'
+                      ? 'bg-amber-600 text-white shadow-xs'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                  }`}
+                >
+                  📌 行きたい場所
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onSelectTab('haunted')}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                    activeTab === 'haunted'
+                      ? 'bg-purple-600 text-white shadow-xs'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                  }`}
+                >
+                  👻 心リスト
+                </button>
+                {customLists?.filter((cl) => cl.id !== 'want_to_go' && cl.id !== 'haunted').map((cl) => (
+                  <button
+                    key={cl.id}
+                    type="button"
+                    onClick={() => onSelectTab(cl.id)}
+                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
+                      activeTab === cl.id
+                        ? 'bg-blue-600 text-white shadow-xs'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                    }`}
+                  >
+                    <span>{cl.icon || '⭐'}</span>
+                    <span>{cl.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* 1. 都道府県 */}
           <div>
             <label className="block text-xs font-bold text-slate-300 mb-1.5">

@@ -90,12 +90,11 @@ export function formatDurationJapanese(minutes: number): string {
   return `約${hours}時間${remainingMinutes}分`;
 }
 
-// Format distance in Japanese (e.g., "12.4 km")
-export function formatDistanceJapanese(km: number): string {
-  if (km < 1) {
-    return `${Math.round(km * 1000)} m`;
-  }
-  return `${km.toFixed(1)} km`;
+// Format distance in Japanese (e.g., "12.4 km") - ご要望に基づきすべて小数点第1位までに統一
+export function formatDistanceJapanese(km: number | undefined | null): string {
+  if (km == null || isNaN(km)) return '0.0 km';
+  const val = Math.max(0, km);
+  return `${val.toFixed(1)} km`;
 }
 
 // Calculate Local Road (下道) Route - 高速・有料道路不使用、最短距離優先

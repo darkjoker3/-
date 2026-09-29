@@ -1,5 +1,5 @@
 import React from 'react';
-import { CustomCategory } from '../types';
+import { CustomCategory, CustomList, SpotListTab } from '../types';
 import { CATEGORY_LIST, CategoryItem } from '../data/categoryConfig';
 import {
   Search,
@@ -10,6 +10,8 @@ import {
   ListOrdered,
   Settings2,
   Cloud,
+  CloudCheck,
+  RefreshCw,
   FileSpreadsheet,
 } from 'lucide-react';
 
@@ -32,7 +34,12 @@ interface MobileFilterBarProps {
   categories?: CustomCategory[];
   onOpenCloudSync?: () => void;
   isCloudSyncActive?: boolean;
+  isSyncing?: boolean;
+  autoSaveStatus?: 'idle' | 'saving' | 'saved';
   onOpenDataModal?: () => void;
+  activeTab?: SpotListTab;
+  onTabChange?: (tab: SpotListTab) => void;
+  customLists?: CustomList[];
 }
 
 export const MobileFilterBar: React.FC<MobileFilterBarProps> = ({
@@ -52,7 +59,12 @@ export const MobileFilterBar: React.FC<MobileFilterBarProps> = ({
   categories,
   onOpenCloudSync,
   isCloudSyncActive,
+  isSyncing = false,
+  autoSaveStatus = 'idle',
   onOpenDataModal,
+  activeTab,
+  onTabChange,
+  customLists,
 }) => {
   const isAllCategories = selectedCategoryIds.length === 0;
 
@@ -98,7 +110,64 @@ export const MobileFilterBar: React.FC<MobileFilterBarProps> = ({
         )}
       </div>
 
-      {/* 2. 基本フィルター (Screen 1準拠: 全国, 未訪問, ★4以上, 降順, 🎛️ボタン) */}
+      {/* 2. リスト選択タブ (全リスト・行きたい場所・心リスト・登録カスタムリスト) */}
+      {onTabChange && (
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar scroll-smooth py-0.5">
+          <button
+            type="button"
+            onClick={() => onTabChange('all')}
+            className={`flex-shrink-0 px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all border cursor-pointer flex items-center gap-1 ${
+              !activeTab || activeTab === 'all'
+                ? 'bg-violet-600 text-white border-violet-400 shadow-xs'
+                : 'bg-slate-900 text-slate-300 border-slate-800 hover:border-slate-700'
+            }`}
+          >
+            <span>全リスト</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onTabChange('want_to_go')}
+            className={`flex-shrink-0 px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all border cursor-pointer flex items-center gap-1 ${
+              activeTab === 'want_to_go'
+                ? 'bg-amber-600 text-white border-amber-400 shadow-xs'
+                : 'bg-slate-900 text-slate-300 border-slate-800 hover:border-slate-700'
+            }`}
+          >
+            <span>📌 行きたい場所</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onTabChange('haunted')}
+            className={`flex-shrink-0 px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all border cursor-pointer flex items-center gap-1 ${
+              activeTab === 'haunted'
+                ? 'bg-purple-600 text-white border-purple-400 shadow-xs'
+                : 'bg-slate-900 text-slate-300 border-slate-800 hover:border-slate-700'
+            }`}
+          >
+            <span>👻 心リスト</span>
+          </button>
+          {customLists?.filter((cl) => cl.id !== 'want_to_go' && cl.id !== 'haunted').map((cl) => {
+            const isActive = activeTab === cl.id;
+            return (
+              <button
+                key={cl.id}
+                type="button"
+                onClick={() => onTabChange(cl.id)}
+                className={`flex-shrink-0 px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all border cursor-pointer flex items-center gap-1 ${
+                  isActive
+                    ? 'bg-blue-600 text-white border-blue-400 shadow-xs'
+                    : 'bg-slate-900 text-slate-300 border-slate-800 hover:border-slate-700'
+                }`}
+              >
+                <span>{cl.icon || '⭐'}</span>
+                <span>{cl.name}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* 3. 基本フィルター (Screen 1準拠: 全国, 未訪問, ★4以上, 降順, 🎛️ボタン) */}
       <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar scroll-smooth py-0.5">
         {/* 全国 */}
         <button
@@ -168,14 +237,34 @@ export const MobileFilterBar: React.FC<MobileFilterBarProps> = ({
             type="button"
             onClick={onOpenCloudSync}
             className={`flex-shrink-0 p-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer ml-auto flex items-center gap-1 ${
-              isCloudSyncActive
+              isSyncing || autoSaveStatus === 'saving'
+                ? 'bg-blue-950/80 text-blue-300 border-blue-600/80 animate-pulse shadow-2xs'
+                : autoSaveStatus === 'saved'
+                ? 'bg-emerald-900/90 text-emerald-300 border-emerald-500 shadow-2xs'
+                : isCloudSyncActive
                 ? 'bg-emerald-950/80 text-emerald-400 border-emerald-700/80 shadow-2xs'
                 : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
             }`}
-            title="Google Driveクラウド同期（自動保存・他端末連携）"
+            title={
+              isSyncing || autoSaveStatus === 'saving'
+                ? 'Google Driveへ自動保存中...'
+                : autoSaveStatus === 'saved'
+                ? 'Google Driveへ保存完了'
+                : isCloudSyncActive
+                ? 'Google Drive自動保存: ON（クリックして同期設定）'
+                : 'Google Drive自動保存（クリックして接続）'
+            }
           >
-            <Cloud className="w-4 h-4" />
-            {isCloudSyncActive && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>}
+            {isSyncing || autoSaveStatus === 'saving' ? (
+              <RefreshCw className="w-4 h-4 animate-spin text-blue-400" />
+            ) : autoSaveStatus === 'saved' ? (
+              <CloudCheck className="w-4 h-4 text-emerald-400" />
+            ) : (
+              <Cloud className="w-4 h-4" />
+            )}
+            {isCloudSyncActive && !isSyncing && autoSaveStatus !== 'saved' && (
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+            )}
           </button>
         )}
 

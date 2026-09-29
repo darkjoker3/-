@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Spot, UserLocation, SpotRouteInfo, CustomCategory } from '../types';
 import { CATEGORY_CONFIG, getSpotMainCategory, getSpotAllCategories, getCategoryMeta } from '../data/categoryConfig';
 import { calculateDistanceKm } from '../utils/geoUtils';
+import { formatDistanceJapanese } from '../utils/routeUtils';
 import {
   ChevronLeft,
   ChevronRight,
@@ -342,7 +343,7 @@ export const MobileSpotListView: React.FC<MobileSpotListViewProps> = ({
                 <div className="flex items-center gap-1 text-slate-400 flex-shrink-0 pl-1">
                   {distanceKm !== null && (
                     <span className="text-[11px] text-slate-300 font-medium">
-                      {distanceKm}km
+                      {formatDistanceJapanese(distanceKm)}
                     </span>
                   )}
                   <ChevronRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-white transition-colors" />

@@ -43,6 +43,7 @@ interface SpotDetailModalProps {
   customLists?: CustomList[];
   onOpenListManager?: (spotId: string) => void;
   onToggleLocationEnabled?: () => void;
+  hasActiveRouteCard?: boolean;
 }
 
 export const SpotDetailModal: React.FC<SpotDetailModalProps> = ({
@@ -64,6 +65,7 @@ export const SpotDetailModal: React.FC<SpotDetailModalProps> = ({
   customLists = [],
   onOpenListManager,
   onToggleLocationEnabled,
+  hasActiveRouteCard = false,
 }) => {
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
@@ -71,13 +73,35 @@ export const SpotDetailModal: React.FC<SpotDetailModalProps> = ({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
 
-  // 上のバー（ヘッダー・即ピン設置バー・マップ内コマンド等）にかぶらないよう動的に最大高さを算出
+  // 画面・マップ領域および上のバーにかぶらないよう動的に横幅・高さを自動調整
   const [maxAvailableHeight, setMaxAvailableHeight] = useState<number>(480);
+  const [maxAvailableWidth, setMaxAvailableWidth] = useState<number>(500);
 
   useEffect(() => {
     if (!isOpen) return;
 
-    const calculateMaxHeight = () => {
+    const calculateDimensions = () => {
+      const isMobile = window.innerWidth < 640;
+      const mapViewportEl = document.getElementById('main-map-viewport');
+      const mapRect = mapViewportEl?.getBoundingClientRect();
+      const mapWidth = mapRect ? mapRect.width : window.innerWidth;
+
+      // 画面・マップ領域の横幅に応じた自動調整
+      let targetWidth: number;
+      if (isMobile) {
+        targetWidth = window.innerWidth - 24;
+      } else if (hasActiveRouteCard) {
+        // ルート案内カード（左）と詳細カード（右）の2枚が同時に開いている場合：
+        // それぞれマップ領域の約48%以内に収め、両者が絶対に重ならないよう自動調整
+        const safeWidth = Math.floor(mapWidth * 0.48) - 16;
+        targetWidth = Math.max(260, Math.min(480, safeWidth));
+      } else {
+        // 詳細カード単体の場合：マップ幅の最大60%または540pxまで見やすく活用
+        const safeWidth = Math.floor(mapWidth * 0.60) - 24;
+        targetWidth = Math.max(300, Math.min(540, safeWidth));
+      }
+      setMaxAvailableWidth(targetWidth);
+
       // 画面上部に存在するすべてのバー・コマンド要素を検索
       const headerEl = document.querySelector('header');
       const quickPinEl = document.getElementById('quick-pin-bar-container');
@@ -99,17 +123,24 @@ export const SpotDetailModal: React.FC<SpotDetailModalProps> = ({
         locToggleEl,
       ];
 
+      const modalPanelEl = document.getElementById('spot-detail-docked-panel');
+      const modalRect = modalPanelEl?.getBoundingClientRect();
+
       let maxObstacleBottom = 0;
       for (const el of candidateElements) {
         if (el) {
           const rect = el.getBoundingClientRect();
-          if (rect.height > 0 && rect.bottom > maxObstacleBottom) {
+          // モーダルが右側にドッキングされている場合（PC/タブレット）、左側に退避したコントロールは
+          // モーダルの直上には重ならないため、水平方向に交差する要素のみ上部障害物として高さを計算
+          const isHorizontallyOverlapping = isMobile || !modalRect || (
+            rect.right > (modalRect.left - 16) && rect.left < (modalRect.right + 16)
+          );
+
+          if (isHorizontallyOverlapping && rect.height > 0 && rect.bottom > maxObstacleBottom) {
             maxObstacleBottom = rect.bottom;
           }
         }
       }
-
-      const isMobile = window.innerWidth < 640;
       // 要素が未取得の場合の安全マージンフォールバック
       if (maxObstacleBottom <= 0) {
         maxObstacleBottom = isMobile ? 168 : 156;
@@ -131,14 +162,15 @@ export const SpotDetailModal: React.FC<SpotDetailModalProps> = ({
       setMaxAvailableHeight(calculated);
     };
 
-    calculateMaxHeight();
+    calculateDimensions();
 
     // ResizeObserverで画面やバーのサイズ変化を常に監視
     let resizeObserver: ResizeObserver | null = null;
     if (typeof ResizeObserver !== 'undefined') {
-      resizeObserver = new ResizeObserver(() => calculateMaxHeight());
+      resizeObserver = new ResizeObserver(() => calculateDimensions());
       const elementsToWatch = [
         document.body,
+        document.getElementById('main-map-viewport'),
         document.querySelector('header'),
         document.getElementById('quick-pin-bar-container'),
         document.getElementById('mobile-filter-bar'),
@@ -150,15 +182,15 @@ export const SpotDetailModal: React.FC<SpotDetailModalProps> = ({
       });
     }
 
-    window.addEventListener('resize', calculateMaxHeight);
-    window.addEventListener('scroll', calculateMaxHeight, { passive: true });
+    window.addEventListener('resize', calculateDimensions);
+    window.addEventListener('scroll', calculateDimensions, { passive: true });
 
     return () => {
-      window.removeEventListener('resize', calculateMaxHeight);
-      window.removeEventListener('scroll', calculateMaxHeight);
+      window.removeEventListener('resize', calculateDimensions);
+      window.removeEventListener('scroll', calculateDimensions);
       if (resizeObserver) resizeObserver.disconnect();
     };
-  }, [isOpen]);
+  }, [isOpen, hasActiveRouteCard]);
 
   if (!isOpen || !spot) return null;
 
@@ -185,10 +217,13 @@ export const SpotDetailModal: React.FC<SpotDetailModalProps> = ({
     <>
       <div
         id={isExpanded ? 'spot-detail-modal-backdrop' : 'spot-detail-docked-panel'}
+        style={{
+          width: isExpanded ? undefined : (window.innerWidth < 640 ? 'auto' : `${maxAvailableWidth}px`),
+        }}
         className={
           isExpanded
             ? 'fixed inset-0 z-[1200] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-200'
-            : 'fixed bottom-16 sm:bottom-4 left-3 right-3 sm:left-auto sm:right-6 z-[1200] w-auto sm:w-full sm:max-w-lg md:max-w-xl max-w-[95vw] pointer-events-none flex flex-col justify-end p-0 animate-in slide-in-from-bottom-4 duration-200'
+            : 'fixed bottom-16 sm:bottom-4 left-3 right-3 sm:left-auto sm:right-4 md:right-6 z-[1200] pointer-events-none flex flex-col justify-end p-0 max-w-[calc(100vw-1.5rem)] animate-in slide-in-from-bottom-4 duration-300 transition-all ease-in-out'
         }
         onClick={(e) => {
           if (isExpanded && e.target === e.currentTarget) onClose();
@@ -197,7 +232,7 @@ export const SpotDetailModal: React.FC<SpotDetailModalProps> = ({
         <div
           id="spot-detail-modal-content"
           style={{
-            maxHeight: isExpanded ? 'calc(90vh - 40px)' : `${maxAvailableHeight}px`,
+            maxHeight: isExpanded ? 'calc(92vh - 20px)' : `${maxAvailableHeight}px`,
           }}
           className={
             isExpanded

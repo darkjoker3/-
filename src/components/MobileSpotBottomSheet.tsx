@@ -251,7 +251,7 @@ export const MobileSpotBottomSheet: React.FC<MobileSpotBottomSheetProps> = ({
             <div>
               <div className="text-[9px] text-slate-400 font-medium">総距離</div>
               <div className="text-sm font-bold text-white mt-0.5">
-                {routeInfo.distanceKm}km
+                {formatDistanceJapanese(routeInfo.distanceKm)}
               </div>
             </div>
             <div className="border-x border-slate-800">

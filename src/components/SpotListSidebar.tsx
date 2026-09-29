@@ -34,6 +34,8 @@ import {
   Trash2,
   ListOrdered,
   Cloud,
+  CloudCheck,
+  RefreshCw,
   FileSpreadsheet,
 } from 'lucide-react';
 
@@ -75,6 +77,10 @@ interface SpotListSidebarProps {
   onDeleteSpot?: (id: string) => void;
   onOpenCloudSync?: () => void;
   isCloudSyncActive?: boolean;
+  isSyncing?: boolean;
+  autoSyncEnabled?: boolean;
+  autoSaveStatus?: 'idle' | 'saving' | 'saved';
+  onFilteredSpotsChange?: (filteredSpots: Spot[]) => void;
 }
 
 export const SpotListSidebar: React.FC<SpotListSidebarProps> = ({
@@ -115,6 +121,10 @@ export const SpotListSidebar: React.FC<SpotListSidebarProps> = ({
   onDeleteSpot,
   onOpenCloudSync,
   isCloudSyncActive,
+  isSyncing = false,
+  autoSyncEnabled = true,
+  autoSaveStatus = 'idle',
+  onFilteredSpotsChange,
 }) => {
   const [draggedTabIndex, setDraggedTabIndex] = useState<number | null>(null);
   const [dragOverTabIndex, setDragOverTabIndex] = useState<number | null>(null);
@@ -130,25 +140,38 @@ export const SpotListSidebar: React.FC<SpotListSidebarProps> = ({
     }
   };
 
-  // Tab scroll & quick list dropdown state
+  // Tab scroll & All lists dropdown state
   const tabsContainerRef = useRef<HTMLDivElement>(null);
-  const [showListMenu, setShowListMenu] = useState(false);
-  const [listMenuSearch, setListMenuSearch] = useState('');
-  const listMenuRef = useRef<HTMLDivElement>(null);
+  const allListsBtnRef = useRef<HTMLButtonElement>(null);
+  const allListsDropdownRef = useRef<HTMLDivElement>(null);
+  const [isAllListsDropdownOpen, setIsAllListsDropdownOpen] = useState(false);
+  const [allListsDropdownPos, setAllListsDropdownPos] = useState<{ top: number; left: number } | null>(null);
+  const [allListsSearch, setAllListsSearch] = useState('');
   const [listToDelete, setListToDelete] = useState<CustomList | null>(null);
   const [spotToDelete, setSpotToDelete] = useState<Spot | null>(null);
 
   // Active custom list currently viewed
   const activeCustomList = customLists.find((cl) => cl.id === viewMode);
 
-  // Tab bar delete menu dropdown state
-  const [showDeleteMenu, setShowDeleteMenu] = useState(false);
-  const deleteMenuRef = useRef<HTMLDivElement>(null);
-
   const scrollTabs = (direction: 'left' | 'right') => {
     if (tabsContainerRef.current) {
       const amount = direction === 'left' ? -200 : 200;
       tabsContainerRef.current.scrollBy({ left: amount, behavior: 'smooth' });
+    }
+  };
+
+  const handleToggleAllListsDropdown = () => {
+    setViewMode('all');
+    if (!isAllListsDropdownOpen) {
+      const rect = allListsBtnRef.current?.getBoundingClientRect();
+      if (rect) {
+        const top = rect.bottom + 6;
+        const left = Math.min(Math.max(8, rect.left), window.innerWidth - 300);
+        setAllListsDropdownPos({ top, left });
+      }
+      setIsAllListsDropdownOpen(true);
+    } else {
+      setIsAllListsDropdownOpen(false);
     }
   };
 
@@ -162,19 +185,40 @@ export const SpotListSidebar: React.FC<SpotListSidebarProps> = ({
   }, [viewMode]);
 
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (listMenuRef.current && !listMenuRef.current.contains(e.target as Node)) {
-        setShowListMenu(false);
-      }
-      if (deleteMenuRef.current && !deleteMenuRef.current.contains(e.target as Node)) {
-        setShowDeleteMenu(false);
+    if (!isAllListsDropdownOpen) return;
+    const updatePos = () => {
+      const rect = allListsBtnRef.current?.getBoundingClientRect();
+      if (rect) {
+        setAllListsDropdownPos({
+          top: rect.bottom + 6,
+          left: Math.min(Math.max(12, rect.left), window.innerWidth - 270),
+        });
       }
     };
-    if (showListMenu || showDeleteMenu) {
+    window.addEventListener('resize', updatePos);
+    window.addEventListener('scroll', updatePos, true);
+    return () => {
+      window.removeEventListener('resize', updatePos);
+      window.removeEventListener('scroll', updatePos, true);
+    };
+  }, [isAllListsDropdownOpen]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        allListsDropdownRef.current &&
+        !allListsDropdownRef.current.contains(e.target as Node) &&
+        allListsBtnRef.current &&
+        !allListsBtnRef.current.contains(e.target as Node)
+      ) {
+        setIsAllListsDropdownOpen(false);
+      }
+    };
+    if (isAllListsDropdownOpen) {
       document.addEventListener('mousedown', handleClickOutside);
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
-  }, [showListMenu, showDeleteMenu]);
+  }, [isAllListsDropdownOpen]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [internalPrefecture, setInternalPrefecture] = useState<string>('all');
@@ -363,6 +407,16 @@ export const SpotListSidebar: React.FC<SpotListSidebarProps> = ({
     });
   }, [spots, searchTerm, selectedCategory, activePrefecture, sortBy, routesInfo, categories, viewMode]);
 
+  // Notify parent of the current filtered spots so map can show pins only for the matching list items
+  const lastFilteredIdsRef = useRef<string>('');
+  useEffect(() => {
+    const currentIds = filteredSpots.map((s) => s.id).join(',');
+    if (lastFilteredIdsRef.current !== currentIds) {
+      lastFilteredIdsRef.current = currentIds;
+      onFilteredSpotsChange?.(filteredSpots);
+    }
+  }, [filteredSpots, onFilteredSpotsChange]);
+
   // Grouped by Prefecture
   const spotsGroupedByPrefecture = useMemo(() => {
     const groups: Record<string, Spot[]> = {};
@@ -455,36 +509,12 @@ export const SpotListSidebar: React.FC<SpotListSidebarProps> = ({
           </div>
         </div>
 
-        {/* List Tabs Area with Smooth Scroll Arrows & Quick Dropdown Picker */}
-        <div className="flex items-center justify-between px-1 text-xs mb-1">
+        {/* List Tabs Area with Smooth Scroll Arrows */}
+        <div className="flex items-center px-1 text-xs mb-1">
           <span className="font-bold text-slate-500 text-[11px] flex items-center gap-1">
             <Bookmark className="w-3 h-3 text-violet-600" />
             <span>リスト一覧</span>
           </span>
-          <div className="flex items-center gap-2.5">
-            {onOpenListSettings && (
-              <button
-                type="button"
-                onClick={onOpenListSettings}
-                className="text-[11px] text-violet-600 hover:text-violet-800 font-bold flex items-center gap-1 cursor-pointer hover:underline transition-colors"
-                title="リストの並び替え・名前変更・整理"
-              >
-                <ListOrdered className="w-3 h-3 text-violet-600" />
-                <span>リスト編集</span>
-              </button>
-            )}
-            {onOpenCategoryManager && (
-              <button
-                type="button"
-                onClick={onOpenCategoryManager}
-                className="text-[11px] text-violet-600 hover:text-violet-800 font-bold flex items-center gap-1 cursor-pointer hover:underline transition-colors"
-                title="カテゴリの編集・追加"
-              >
-                <Settings2 className="w-3 h-3 text-violet-600" />
-                <span>カテゴリ編集</span>
-              </button>
-            )}
-          </div>
         </div>
 
         <div className="relative">
@@ -504,23 +534,30 @@ export const SpotListSidebar: React.FC<SpotListSidebarProps> = ({
               ref={tabsContainerRef}
               className="bg-slate-100/90 p-1 rounded-xl flex items-center gap-1 text-xs font-medium border border-slate-200/80 overflow-x-auto no-scrollbar scroll-smooth flex-1 min-w-0"
             >
-              {/* 全リスト (全表示) */}
+              {/* 全リスト (全表示) - クリックで全スポット表示＆登録リスト一覧をドロップアウト */}
               <button
+                ref={allListsBtnRef}
                 id="view-all-spots-tab"
                 data-tab-id="all"
                 type="button"
-                onClick={() => setViewMode('all')}
-                className={`flex-shrink-0 min-w-[76px] py-1.5 px-2.5 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1 whitespace-nowrap text-center ${
+                onClick={handleToggleAllListsDropdown}
+                className={`flex-shrink-0 min-w-[84px] py-1.5 px-2.5 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1 whitespace-nowrap text-center ${
                   viewMode === 'all'
                     ? 'bg-white text-slate-900 font-bold shadow-xs ring-1 ring-violet-200'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
                 }`}
+                title="全リスト表示（クリックで登録リスト一覧を展開）"
               >
                 <ListFilter className="w-3.5 h-3.5 text-violet-600 flex-shrink-0" />
                 <span>全リスト</span>
                 <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-200 text-slate-700 font-bold ml-0.5">
                   {spots.length}
                 </span>
+                <ChevronDown
+                  className={`w-3 h-3 text-slate-400 transition-transform ${
+                    isAllListsDropdownOpen ? 'rotate-180 text-violet-600' : ''
+                  }`}
+                />
               </button>
 
               {/* カスタムリストの各タブ（行きたい場所・心霊スポット・ユーザー作成リストすべてドラッグ＆ドロップで並び替え可能） */}
@@ -641,126 +678,6 @@ export const SpotListSidebar: React.FC<SpotListSidebarProps> = ({
                 </span>
               </button>
 
-              {/* 新規リスト追加ボタン */}
-              {onOpenCreateList && (
-                <button
-                  id="create-new-list-tab-btn"
-                  type="button"
-                  onClick={onOpenCreateList}
-                  className="flex-shrink-0 py-1.5 px-2 rounded-lg text-violet-700 hover:bg-violet-100/70 border border-dashed border-violet-300 transition-all cursor-pointer flex items-center gap-1 whitespace-nowrap text-xs font-semibold"
-                  title="新しいリストを作成"
-                >
-                  <FolderPlus className="w-3.5 h-3.5" />
-                  <span>＋リスト追加</span>
-                </button>
-              )}
-
-              {/* リスト並び替え・管理ボタン */}
-              {customLists.length > 0 && onOpenListSettings && (
-                <button
-                  id="open-list-settings-tab-btn"
-                  type="button"
-                  onClick={onOpenListSettings}
-                  className="flex-shrink-0 py-1.5 px-2.5 rounded-lg text-violet-700 bg-violet-50/80 hover:bg-violet-100 border border-violet-200 transition-all cursor-pointer flex items-center gap-1 whitespace-nowrap text-xs font-bold"
-                  title="リストの並び替え・名前編集・整理"
-                >
-                  <ListOrdered className="w-3.5 h-3.5 text-violet-600" />
-                  <span>リスト編集</span>
-                </button>
-              )}
-
-              {/* タブバーからリスト削除できる項目 */}
-              {customLists.length > 0 && onDeleteCustomList && (
-                <div className="relative flex-shrink-0 flex items-center" ref={deleteMenuRef}>
-                  <button
-                    id="delete-list-tab-btn"
-                    type="button"
-                    onClick={() => {
-                      if (activeCustomList) {
-                        setListToDelete(activeCustomList);
-                      } else {
-                        setShowDeleteMenu((prev) => !prev);
-                      }
-                    }}
-                    className={`flex-shrink-0 py-1.5 px-2 rounded-l-lg border transition-all cursor-pointer flex items-center gap-1 whitespace-nowrap text-xs font-medium ${
-                      activeCustomList
-                        ? 'text-rose-700 bg-rose-50/80 hover:bg-rose-100 border-rose-200 hover:border-rose-300'
-                        : 'text-slate-600 hover:text-rose-600 hover:bg-rose-50 border-slate-200 hover:border-rose-200'
-                    } ${customLists.length > 1 ? 'border-r-0' : 'rounded-r-lg'}`}
-                    title={
-                      activeCustomList
-                        ? `現在選択中の「${activeCustomList.name}」を削除`
-                        : 'リストを削除（クリックでリスト選択）'
-                    }
-                  >
-                    <Trash2 className="w-3.5 h-3.5 text-rose-500" />
-                    <span>{activeCustomList ? 'このリスト削除' : 'リスト削除'}</span>
-                  </button>
-                  {customLists.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => setShowDeleteMenu((prev) => !prev)}
-                      className={`py-1.5 px-1 rounded-r-lg border transition-all cursor-pointer flex items-center justify-center text-xs ${
-                        activeCustomList
-                          ? 'text-rose-700 bg-rose-50/80 hover:bg-rose-100 border-rose-200 hover:border-rose-300'
-                          : 'text-slate-600 hover:text-rose-600 hover:bg-rose-50 border-slate-200 hover:border-rose-200'
-                      }`}
-                      title="削除するリストを一覧から選択"
-                    >
-                      <ChevronDown
-                        className={`w-3 h-3 text-slate-500 transition-transform ${showDeleteMenu ? 'rotate-180' : ''}`}
-                      />
-                    </button>
-                  )}
-
-                  {/* 削除対象リスト選択メニュー */}
-                  {showDeleteMenu && (
-                    <div className="absolute left-0 top-full mt-1.5 w-60 bg-white rounded-xl shadow-xl border border-slate-200 z-50 p-2 flex flex-col gap-1 animate-in fade-in zoom-in-95 duration-100">
-                      <div className="px-2 py-1 text-[11px] font-bold text-slate-400 flex items-center justify-between border-b border-slate-100 pb-1">
-                        <span>削除するリストを選択</span>
-                        <span className="text-[10px] text-slate-400">{customLists.length}件</span>
-                      </div>
-                      <div className="max-h-56 overflow-y-auto space-y-0.5 py-1">
-                        {customLists.map((cl, clIdx) => {
-                          const count = customListCounts[cl.id] || 0;
-                          const isCurrent = activeCustomList?.id === cl.id;
-                          return (
-                            <button
-                              key={`${cl.id}_${clIdx}`}
-                              type="button"
-                              onClick={() => {
-                                setShowDeleteMenu(false);
-                                setListToDelete(cl);
-                              }}
-                              className={`w-full px-2 py-1.5 rounded-lg text-xs flex items-center justify-between transition-colors cursor-pointer text-left group ${
-                                isCurrent
-                                  ? 'bg-rose-50 text-rose-800 font-semibold'
-                                  : 'hover:bg-rose-50/60 text-slate-700 hover:text-rose-700'
-                              }`}
-                            >
-                              <div className="flex items-center gap-2 min-w-0">
-                                <span className="text-sm flex-shrink-0">{cl.icon || '⭐'}</span>
-                                <span className="truncate">{cl.name}</span>
-                                {isCurrent && (
-                                  <span className="text-[9px] px-1 py-0.2 bg-rose-200/80 text-rose-800 rounded font-normal">
-                                    選択中
-                                  </span>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-1.5 flex-shrink-0">
-                                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-600 font-bold group-hover:bg-rose-100 group-hover:text-rose-700">
-                                  {count}
-                                </span>
-                                <Trash2 className="w-3.5 h-3.5 text-slate-400 group-hover:text-rose-600" />
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
 
             {/* Scroll Right Button */}
@@ -772,197 +689,237 @@ export const SpotListSidebar: React.FC<SpotListSidebarProps> = ({
             >
               <ChevronRight className="w-3.5 h-3.5" />
             </button>
+          </div>
 
-            {/* Quick List Menu Dropdown Button (リスト直接選択) */}
-            <div className="relative flex-shrink-0" ref={listMenuRef}>
-              <button
-                type="button"
-                id="quick-list-dropdown-btn"
-                onClick={() => setShowListMenu((prev) => !prev)}
-                className={`p-1.5 rounded-lg border text-xs font-bold flex items-center gap-1 transition-all cursor-pointer shadow-2xs ${
-                  showListMenu
-                    ? 'bg-violet-600 text-white border-violet-700'
-                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
-                }`}
-                title="リスト一覧から直接選択"
-              >
-                <Bookmark className="w-3.5 h-3.5" />
-                <ChevronDown className={`w-3 h-3 transition-transform ${showListMenu ? 'rotate-180' : ''}`} />
-              </button>
+          {/* 全リストを押したときにドロップアウト表示される登録リスト一覧 */}
+          {isAllListsDropdownOpen && (
+            <div
+              ref={allListsDropdownRef}
+              style={{
+                top: allListsDropdownPos?.top ?? 120,
+                left: allListsDropdownPos?.left ?? 16,
+              }}
+              className="fixed w-72 max-w-[calc(100vw-32px)] bg-white rounded-2xl shadow-2xl border border-slate-200 z-[999] p-2 flex flex-col gap-1.5 animate-in fade-in zoom-in-95 duration-150"
+            >
+              {/* Dropdown Header */}
+              <div className="px-2 py-1 border-b border-slate-100 flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <Bookmark className="w-3.5 h-3.5 text-violet-600" />
+                  <span className="text-xs font-bold text-slate-800">登録リスト一覧</span>
+                  <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-violet-50 text-violet-700 font-bold border border-violet-100">
+                    {customLists.length + 2}件
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsAllListsDropdownOpen(false)}
+                  className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                  title="閉じる"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
 
-              {/* Dropdown Popup */}
-              {showListMenu && (
-                <div className="absolute right-0 top-full mt-1.5 w-64 bg-white rounded-xl shadow-xl border border-slate-200 z-50 p-2 flex flex-col gap-1 animate-in fade-in zoom-in-95 duration-100">
-                  <div className="px-2 py-1 text-[11px] font-bold text-slate-400 flex items-center justify-between border-b border-slate-100 pb-1.5">
-                    <span>リストを直接選択</span>
-                    <span className="text-[10px] text-slate-500 font-normal">全{customLists.length + 2}項目</span>
-                  </div>
-
-                  {/* Search filter in dropdown if many lists */}
-                  {customLists.length >= 4 && (
-                    <div className="pt-1 pb-1">
-                      <input
-                        type="text"
-                        value={listMenuSearch}
-                        onChange={(e) => setListMenuSearch(e.target.value)}
-                        placeholder="リスト名を検索..."
-                        className="w-full text-xs px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-violet-500"
-                        autoFocus
-                      />
-                    </div>
-                  )}
-
-                  <div className="max-h-60 overflow-y-auto space-y-0.5 py-1">
-                    {/* 全リスト */}
-                    {(!listMenuSearch.trim() || '全リスト'.includes(listMenuSearch.trim())) && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setViewMode('all');
-                          setShowListMenu(false);
-                          setListMenuSearch('');
-                        }}
-                        className={`w-full px-2 py-1.5 rounded-lg text-xs flex items-center justify-between transition-colors cursor-pointer text-left ${
-                          viewMode === 'all'
-                            ? 'bg-violet-50 text-violet-900 font-bold'
-                            : 'hover:bg-slate-100 text-slate-700'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <ListFilter className="w-3.5 h-3.5 text-violet-600" />
-                          <span>全リスト (すべてのスポット)</span>
-                        </div>
-                        <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-200 text-slate-700 font-bold">
-                          {spots.length}
-                        </span>
-                      </button>
-                    )}
-
-                    {/* 各カスタムリスト */}
-                    {customLists
-                      .filter((cl) => !listMenuSearch.trim() || cl.name.toLowerCase().includes(listMenuSearch.toLowerCase()))
-                      .map((cl, clIdx) => {
-                        const isSelected = viewMode === cl.id;
-                        const count = customListCounts[cl.id] || 0;
-                        return (
-                          <div
-                            key={`${cl.id}_${clIdx}`}
-                            className={`w-full rounded-lg text-xs flex items-center justify-between transition-colors group ${
-                              isSelected
-                                ? 'bg-violet-50 font-bold text-slate-900'
-                                : 'hover:bg-slate-100 text-slate-700'
-                            }`}
-                          >
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setViewMode(cl.id);
-                                setShowListMenu(false);
-                                setListMenuSearch('');
-                              }}
-                              className="flex-1 px-2 py-1.5 flex items-center justify-between cursor-pointer min-w-0 text-left"
-                            >
-                              <div className="flex items-center gap-2 min-w-0">
-                                <span
-                                  className="w-2 h-2 rounded-full flex-shrink-0"
-                                  style={{ backgroundColor: cl.color }}
-                                />
-                                <span className="text-sm flex-shrink-0">{cl.icon || '⭐'}</span>
-                                <span className="truncate">{cl.name}</span>
-                              </div>
-                              <div className="flex items-center gap-1.5 flex-shrink-0 ml-1">
-                                <span
-                                  className="text-[10px] px-1.5 py-0.2 rounded-full font-bold"
-                                  style={{
-                                    backgroundColor: isSelected ? `${cl.color}25` : '#e2e8f0',
-                                    color: isSelected ? cl.color : '#334155',
-                                  }}
-                                >
-                                  {count}
-                                </span>
-                                {isSelected && <Check className="w-3.5 h-3.5 text-violet-600" />}
-                              </div>
-                            </button>
-
-                            {onDeleteCustomList && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setShowListMenu(false);
-                                  setListToDelete(cl);
-                                }}
-                                className="p-1 mr-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer flex-shrink-0"
-                                title={`「${cl.name}」を削除`}
-                                aria-label={`「${cl.name}」を削除`}
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                          </div>
-                        );
-                      })}
-
-                    {/* 県別リスト */}
-                    {(!listMenuSearch.trim() || '県別リスト 都道府県'.includes(listMenuSearch.trim())) && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setViewMode('prefecture');
-                          setShowListMenu(false);
-                          setListMenuSearch('');
-                        }}
-                        className={`w-full px-2 py-1.5 rounded-lg text-xs flex items-center justify-between transition-colors cursor-pointer text-left ${
-                          viewMode === 'prefecture'
-                            ? 'bg-violet-50 text-violet-900 font-bold'
-                            : 'hover:bg-slate-100 text-slate-700'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <Building2 className="w-3.5 h-3.5 text-violet-600" />
-                          <span>県別リスト (都道府県別)</span>
-                        </div>
-                        <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-200 text-slate-700 font-bold">
-                          {prefecturesWithCounts.length}
-                        </span>
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Actions in Dropdown Footer */}
-                  <div className="border-t border-slate-100 pt-1.5 flex items-center justify-between gap-1 text-[11px]">
-                    {onOpenCreateList && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowListMenu(false);
-                          onOpenCreateList();
-                        }}
-                        className="text-violet-700 hover:text-violet-900 font-semibold p-1 hover:bg-violet-50 rounded flex items-center gap-1 cursor-pointer"
-                      >
-                        <FolderPlus className="w-3 h-3" />
-                        <span>新規リスト追加</span>
-                      </button>
-                    )}
-                    {customLists.length > 0 && onOpenListSettings && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowListMenu(false);
-                          onOpenListSettings();
-                        }}
-                        className="text-violet-700 hover:text-violet-900 font-semibold p-1 hover:bg-violet-50 rounded flex items-center gap-1 cursor-pointer"
-                        title="リストの作成・並び替え・名前変更"
-                      >
-                        <ListOrdered className="w-3 h-3 text-violet-600" />
-                        <span>リスト編集</span>
-                      </button>
-                    )}
+              {/* Search filter in dropdown if many lists */}
+              {customLists.length >= 4 && (
+                <div className="px-1 py-0.5">
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={allListsSearch}
+                      onChange={(e) => setAllListsSearch(e.target.value)}
+                      placeholder="リスト名を検索..."
+                      className="w-full text-xs pl-8 pr-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-violet-500 focus:bg-white transition-colors"
+                      autoFocus
+                    />
                   </div>
                 </div>
               )}
+
+              {/* List of registered lists */}
+              <div className="max-h-64 overflow-y-auto space-y-0.5 py-0.5">
+                {/* 1. 全リスト */}
+                {(!allListsSearch.trim() || '全リスト すべて'.includes(allListsSearch.trim())) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setViewMode('all');
+                      setIsAllListsDropdownOpen(false);
+                      setAllListsSearch('');
+                    }}
+                    className={`w-full px-2.5 py-2 rounded-xl text-xs flex items-center justify-between transition-colors cursor-pointer text-left ${
+                      viewMode === 'all'
+                        ? 'bg-violet-50 text-violet-900 font-bold ring-1 ring-violet-200'
+                        : 'hover:bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-lg bg-violet-100 flex items-center justify-center flex-shrink-0 text-violet-700">
+                        <ListFilter className="w-3.5 h-3.5" />
+                      </div>
+                      <div className="flex flex-col min-w-0">
+                        <span className="font-bold">全リスト</span>
+                        <span className="text-[10px] text-slate-400 font-normal">すべての登録スポット</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-200 text-slate-700 font-bold">
+                        {spots.length}
+                      </span>
+                      {viewMode === 'all' && <Check className="w-3.5 h-3.5 text-violet-600" />}
+                    </div>
+                  </button>
+                )}
+
+                {/* 2. 各カスタムリスト */}
+                {customLists
+                  .filter(
+                    (cl) =>
+                      !allListsSearch.trim() ||
+                      cl.name.toLowerCase().includes(allListsSearch.toLowerCase())
+                  )
+                  .map((cl, clIdx) => {
+                    const isSelected = viewMode === cl.id;
+                    const count = customListCounts[cl.id] || 0;
+                    return (
+                      <div
+                        key={`${cl.id}_${clIdx}`}
+                        className={`w-full rounded-xl text-xs flex items-center justify-between transition-colors group ${
+                          isSelected
+                            ? 'bg-violet-50/90 font-bold text-slate-900 ring-1 ring-violet-200'
+                            : 'hover:bg-slate-100 text-slate-700'
+                        }`}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setViewMode(cl.id);
+                            setIsAllListsDropdownOpen(false);
+                            setAllListsSearch('');
+                          }}
+                          className="flex-1 px-2.5 py-2 flex items-center justify-between cursor-pointer min-w-0 text-left"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div
+                              className="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0 text-xs shadow-2xs"
+                              style={{
+                                backgroundColor: `${cl.color}20`,
+                                border: `1px solid ${cl.color}40`,
+                              }}
+                            >
+                              <span>{cl.icon || '⭐'}</span>
+                            </div>
+                            <div className="flex flex-col min-w-0">
+                              <span className="truncate">{cl.name}</span>
+                              {cl.description && (
+                                <span className="text-[10px] text-slate-400 font-normal truncate">
+                                  {cl.description}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1.5 flex-shrink-0 ml-1.5">
+                            <span
+                              className="text-[10px] px-1.5 py-0.2 rounded-full font-bold"
+                              style={{
+                                backgroundColor: isSelected ? `${cl.color}30` : '#f1f5f9',
+                                color: isSelected ? cl.color : '#475569',
+                              }}
+                            >
+                              {count}
+                            </span>
+                            {isSelected && <Check className="w-3.5 h-3.5 text-violet-600" />}
+                          </div>
+                        </button>
+
+                        {onDeleteCustomList && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setIsAllListsDropdownOpen(false);
+                              setListToDelete(cl);
+                            }}
+                            className="p-1 mr-1 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer flex-shrink-0 opacity-0 group-hover:opacity-100"
+                            title={`「${cl.name}」を削除`}
+                            aria-label={`「${cl.name}」を削除`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                {/* 3. 県別リスト */}
+                {(!allListsSearch.trim() || '県別リスト 都道府県'.includes(allListsSearch.trim())) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setViewMode('prefecture');
+                      setIsAllListsDropdownOpen(false);
+                      setAllListsSearch('');
+                    }}
+                    className={`w-full px-2.5 py-2 rounded-xl text-xs flex items-center justify-between transition-colors cursor-pointer text-left ${
+                      viewMode === 'prefecture'
+                        ? 'bg-violet-50 text-violet-900 font-bold ring-1 ring-violet-200'
+                        : 'hover:bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-lg bg-emerald-100 flex items-center justify-center flex-shrink-0 text-emerald-700">
+                        <Building2 className="w-3.5 h-3.5" />
+                      </div>
+                      <div className="flex flex-col min-w-0">
+                        <span className="font-bold">県別リスト</span>
+                        <span className="text-[10px] text-slate-400 font-normal">都道府県別のスポット</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-200 text-slate-700 font-bold">
+                        {prefecturesWithCounts.length}
+                      </span>
+                      {viewMode === 'prefecture' && <Check className="w-3.5 h-3.5 text-violet-600" />}
+                    </div>
+                  </button>
+                )}
+              </div>
+
+              {/* Actions in Dropdown Footer */}
+              {(onOpenCreateList || onOpenListSettings) && (
+                <div className="border-t border-slate-100 pt-1.5 px-1 flex items-center justify-between gap-1 text-[11px]">
+                  {onOpenCreateList && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsAllListsDropdownOpen(false);
+                        onOpenCreateList();
+                      }}
+                      className="text-violet-700 hover:text-violet-900 font-semibold p-1 hover:bg-violet-50 rounded-lg flex items-center gap-1 cursor-pointer transition-colors"
+                    >
+                      <FolderPlus className="w-3.5 h-3.5" />
+                      <span>新規リスト追加</span>
+                    </button>
+                  )}
+                  {onOpenListSettings && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsAllListsDropdownOpen(false);
+                        onOpenListSettings();
+                      }}
+                      className="text-slate-600 hover:text-violet-700 font-semibold p-1 hover:bg-slate-100 rounded-lg flex items-center gap-1 cursor-pointer transition-colors ml-auto"
+                      title="リストの並び替え・名前変更"
+                    >
+                      <ListOrdered className="w-3.5 h-3.5 text-slate-500" />
+                      <span>リスト並び替え</span>
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
-          </div>
+          )}
         </div>
 
         {/* 選択中のカスタムリスト情報＆クイック編集・並び替えバー */}
@@ -1524,16 +1481,55 @@ export const SpotListSidebar: React.FC<SpotListSidebarProps> = ({
             <button
               type="button"
               onClick={onOpenCloudSync}
-              title="Google Driveクラウド同期（自動保存・他端末と同期）"
-              className={`px-2 py-1 rounded-lg transition-colors flex items-center gap-1 cursor-pointer border ${
-                isCloudSyncActive
-                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100 font-medium'
-                  : 'hover:bg-white text-slate-600 hover:text-slate-900 border-transparent hover:border-slate-200'
+              title={
+                isSyncing || autoSaveStatus === 'saving'
+                  ? 'Google Drive APIで自動保存中...'
+                  : autoSaveStatus === 'saved'
+                  ? 'Google Driveへ保存完了'
+                  : isCloudSyncActive && autoSyncEnabled
+                  ? 'Google Drive API自動保存: ON（クリックして同期設定）'
+                  : isCloudSyncActive && !autoSyncEnabled
+                  ? 'Google Drive API自動保存: 一時停止中（クリックして再開）'
+                  : 'Google Drive自動保存（クリックして接続）'
+              }
+              className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer border text-[11px] font-bold ${
+                isSyncing || autoSaveStatus === 'saving'
+                  ? 'bg-blue-50 text-blue-700 border-blue-300 animate-pulse shadow-2xs'
+                  : autoSaveStatus === 'saved'
+                  ? 'bg-emerald-100 text-emerald-900 border-emerald-300 shadow-2xs'
+                  : isCloudSyncActive && autoSyncEnabled
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
+                  : isCloudSyncActive && !autoSyncEnabled
+                  ? 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
+                  : 'bg-white text-slate-700 hover:bg-slate-50 border-slate-200 hover:border-slate-300 shadow-2xs'
               }`}
             >
-              <Cloud className={`w-3.5 h-3.5 ${isCloudSyncActive ? 'text-emerald-600' : 'text-slate-500'}`} />
-              <span className="hidden sm:inline">Drive同期</span>
-              {isCloudSyncActive && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>}
+              {isSyncing || autoSaveStatus === 'saving' ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-blue-600" />
+                  <span className="hidden sm:inline">Drive自動保存中...</span>
+                  <span className="sm:hidden">保存中...</span>
+                </>
+              ) : autoSaveStatus === 'saved' ? (
+                <>
+                  <CloudCheck className="w-3.5 h-3.5 text-emerald-600" />
+                  <span className="hidden sm:inline">Drive保存完了</span>
+                  <span className="sm:hidden">保存完了</span>
+                </>
+              ) : isCloudSyncActive ? (
+                <>
+                  <Cloud className={`w-3.5 h-3.5 ${autoSyncEnabled ? 'text-emerald-600' : 'text-amber-600'}`} />
+                  <span className="hidden sm:inline">Drive自動保存: {autoSyncEnabled ? 'ON' : '停止中'}</span>
+                  <span className="sm:hidden">Drive: {autoSyncEnabled ? 'ON' : '停止'}</span>
+                  {autoSyncEnabled && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>}
+                </>
+              ) : (
+                <>
+                  <Cloud className="w-3.5 h-3.5 text-blue-600" />
+                  <span className="hidden sm:inline">Drive自動保存: 未接続</span>
+                  <span className="sm:hidden">Drive接続</span>
+                </>
+              )}
             </button>
           )}
         </div>

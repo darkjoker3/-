@@ -415,39 +415,57 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
                 </div>
               </div>
 
-              {/* Cloud File Info */}
+              {/* Cloud File Info & Drive Link */}
               {cloudMeta && (
-                <p className="text-[10px] text-slate-400 flex items-center gap-1">
-                  <span>保存先ファイル: Google Drive / {cloudMeta.name}</span>
-                  {cloudData?.updatedByDevice && (
-                    <span className="text-slate-500">
-                      (最終更新元: {cloudData.updatedByDevice})
-                    </span>
-                  )}
-                </p>
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 p-2.5 bg-blue-50/70 border border-blue-200/80 rounded-xl text-[11px] text-slate-700">
+                  <div className="min-w-0">
+                    <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                      <CloudCheck className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                      <span>保存先: Googleドライブ / {cloudMeta.name}</span>
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-0.5">
+                      ※この1つのJSONファイルに対して毎回上書き保存・同期されます
+                      {cloudData?.updatedByDevice && ` (最終更新: ${cloudData.updatedByDevice})`}
+                    </p>
+                  </div>
+                  <a
+                    href={`https://drive.google.com/file/d/${cloudMeta.id}/view`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-1.5 bg-white hover:bg-blue-50 text-blue-700 font-bold rounded-lg border border-blue-300 shadow-2xs transition-all flex items-center gap-1 text-[10px] cursor-pointer whitespace-nowrap flex-shrink-0"
+                    title="ご自身のGoogleドライブでこのJSONファイルを開く"
+                  >
+                    <ExternalLink className="w-3 h-3 text-blue-600" />
+                    <span>Googleドライブで開く</span>
+                  </a>
+                </div>
               )}
             </div>
           )}
 
-          {/* 3. Auto Sync Setting */}
+          {/* 3. Google Drive API Auto-Save Setting */}
           {currentUser && (
-            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between">
+            <div className="p-3.5 bg-gradient-to-r from-blue-50/90 via-indigo-50/40 to-slate-50 border border-blue-200 rounded-2xl flex items-center justify-between shadow-2xs">
               <div>
-                <span className="font-bold text-slate-800 text-xs block">
-                  バックグラウンド自動同期
+                <span className="font-bold text-slate-900 text-xs flex items-center gap-1.5 flex-wrap">
+                  <CloudCheck className="w-4 h-4 text-blue-600" />
+                  <span>Google Drive API 自動保存</span>
+                  <span className="text-[10px] bg-blue-100 text-blue-800 font-semibold px-2 py-0.2 rounded-full border border-blue-200">
+                    リアルタイム
+                  </span>
                 </span>
-                <span className="text-[11px] text-slate-500 block mt-0.5">
-                  スポットの追加や編集時にクラウドへ自動保存し、他端末の更新を反映
+                <span className="text-[11px] text-slate-600 block mt-1 leading-relaxed">
+                  スポットの追加・編集・削除時やマイリスト更新時に、Google Drive（<code>{SYNC_FILE_NAME}</code>）へ自動でリアルタイム上書き保存します
                 </span>
               </div>
-              <label className="relative inline-flex items-center cursor-pointer ml-3 flex-shrink-0">
+              <label className="relative inline-flex items-center cursor-pointer ml-3 flex-shrink-0" title="Google Drive API自動保存のON/OFF">
                 <input
                   type="checkbox"
                   checked={autoSyncEnabled}
                   onChange={(e) => onToggleAutoSync(e.target.checked)}
                   className="sr-only peer"
                 />
-                <div className="w-10 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
               </label>
             </div>
           )}

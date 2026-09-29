@@ -261,6 +261,7 @@ export default function App() {
     }
   });
   const [hasPendingChanges, setHasPendingChanges] = useState<boolean>(false);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
 
   // Screen & Device Breakpoint Detection (PC: >=1025px, Tablet: 769-1024px, Mobile: <=768px)
   const [windowWidth, setWindowWidth] = useState(() =>
@@ -1248,13 +1249,22 @@ export default function App() {
     );
   }, []);
 
-  // スマホ表示用のスポットフィルタリング (検索・基本フィルター・カテゴリ複数選択・都道府県)
+  // スマホ表示用のスポットフィルタリング (検索・基本フィルター・カテゴリ複数選択・都道府県・選択中のリスト)
   const filteredSpotsForMobile = React.useMemo(() => {
     let result = [...spots];
 
     // 都道府県
     if (selectedPrefecture !== 'all') {
       result = result.filter((s) => s.prefecture === selectedPrefecture);
+    }
+
+    // リストフィルター (選択中のリストに該当するスポットのみ抽出)
+    if (activeTab === 'want_to_go') {
+      result = result.filter((s) => Boolean(s.isWantToGo || s.listIds?.includes('want_to_go')));
+    } else if (activeTab === 'haunted') {
+      result = result.filter((s) => Boolean(s.isHaunted ?? (s.category === 'haunted' || s.listIds?.includes('haunted'))));
+    } else if (activeTab && activeTab !== 'all' && activeTab !== 'prefecture') {
+      result = result.filter((s) => Boolean(s.listIds?.includes(activeTab)));
     }
 
     // 基本フィルター: 'all' | 'unvisited' | 'visited' | 'rating4' | 'popular'
@@ -1307,7 +1317,57 @@ export default function App() {
     });
 
     return result;
-  }, [spots, selectedPrefecture, mobileBasicFilter, mobileSelectedCategories, mobileSearchQuery, mobileSortOrder]);
+  }, [spots, selectedPrefecture, activeTab, mobileBasicFilter, mobileSelectedCategories, mobileSearchQuery, mobileSortOrder]);
+
+  // サイドバーで絞り込まれたスポット（検索・カテゴリ・タブ等）
+  const [sidebarFilteredSpots, setSidebarFilteredSpots] = useState<Spot[] | null>(null);
+
+  const handleFilteredSpotsChange = useCallback((filtered: Spot[]) => {
+    setSidebarFilteredSpots(filtered);
+  }, []);
+
+  // 選択されたリスト（activeTab）に該当するスポット (フォールバック用)
+  const spotsMatchingActiveTab = React.useMemo(() => {
+    return spots.filter((spot) => {
+      if (activeTab === 'want_to_go') {
+        return Boolean(spot.isWantToGo || spot.listIds?.includes('want_to_go'));
+      }
+      if (activeTab === 'haunted') {
+        return Boolean(spot.isHaunted ?? (spot.category === 'haunted' || spot.listIds?.includes('haunted')));
+      }
+      if (activeTab === 'prefecture') {
+        if (selectedPrefecture && selectedPrefecture !== 'all') {
+          return spot.prefecture === selectedPrefecture;
+        }
+        return true;
+      }
+      if (activeTab && activeTab !== 'all') {
+        return Boolean(spot.listIds?.includes(activeTab));
+      }
+      return true;
+    });
+  }, [spots, activeTab, selectedPrefecture]);
+
+  // 地図上に表示するピン（選択中のリスト・絞り込み結果に該当するものだけ）
+  const displayedSpotsForMap = React.useMemo(() => {
+    if (sidebarFilteredSpots !== null) {
+      return sidebarFilteredSpots;
+    }
+    return spotsMatchingActiveTab;
+  }, [sidebarFilteredSpots, spotsMatchingActiveTab]);
+
+  // 選択中スポットが現在表示中のリストに含まれなくなった場合は選択解除
+  useEffect(() => {
+    if (selectedSpotId && !displayedSpotsForMap.some((s) => s.id === selectedSpotId)) {
+      setSelectedSpotId(null);
+    }
+    if (selectedSpotIds.length > 0) {
+      const valid = selectedSpotIds.filter((id) => displayedSpotsForMap.some((s) => s.id === id));
+      if (valid.length !== selectedSpotIds.length) {
+        setSelectedSpotIds(valid);
+      }
+    }
+  }, [displayedSpotsForMap, selectedSpotId, selectedSpotIds]);
 
   // Selected spot object
   const activeSpot = spots.find((s) => s.id === selectedSpotId) || null;
@@ -1582,6 +1642,9 @@ export default function App() {
             onOpenCloudSync={() => setIsCloudSyncModalOpen(true)}
             isCloudSyncActive={!!currentUser}
             onOpenDataModal={() => setIsDataModalOpen(true)}
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+            customLists={customLists}
           />
 
           {/* 4. 地図 (全画面大画面表示) または「一覧」選択時のリスト表示 (Screen 6 準拠) */}
@@ -1635,12 +1698,14 @@ export default function App() {
                 customLists={customLists}
                 onOpenListManager={(spotId) => setListManagerSpotId(spotId)}
                 onEditSpot={handleOpenEditSpot}
+                activeTab={activeTab}
+                onSelectTab={setActiveTab}
               />
             )}
           </div>
 
           {/* 都道府県情報カード */}
-          {showPrefectureCard && selectedPrefecture && selectedPrefecture !== 'all' && (
+          {showPrefectureCard && selectedPrefecture && selectedPrefecture !== 'all' && !isDetailModalOpen && (
             <PrefectureInfoCard
               prefecture={selectedPrefecture}
               spots={spots}
@@ -1735,6 +1800,9 @@ export default function App() {
             totalFilteredCount={filteredSpotsForMobile.length}
             onOpenCategoryManager={() => setIsCategoryModalOpen(true)}
             onOpenListSettings={() => setIsListSettingsModalOpen(true)}
+            activeTab={activeTab}
+            onSelectTab={setActiveTab}
+            customLists={customLists}
           />
         </div>
       ) : (
@@ -2100,6 +2168,7 @@ export default function App() {
                         onDeleteSpot={handleDeleteSpot}
                         onOpenCloudSync={() => setIsCloudSyncModalOpen(true)}
                         isCloudSyncActive={!!currentUser}
+                        onFilteredSpotsChange={handleFilteredSpotsChange}
                       />
                     </div>
                   </aside>
@@ -2109,7 +2178,7 @@ export default function App() {
                     className="order-1 md:order-2 flex-1 relative w-full h-[44vh] sm:h-[48vh] md:h-full min-h-[260px] md:min-h-0 min-w-0 bg-slate-100 flex-shrink-0 md:flex-shrink"
                   >
                     <JapanMap
-                      spots={spots}
+                      spots={displayedSpotsForMap}
                       selectedSpotId={selectedSpotId}
                       selectedSpotIds={selectedSpotIds}
                       onSelectSpot={handleSelectSpot}
@@ -2136,6 +2205,8 @@ export default function App() {
                       customLists={customLists}
                       onOpenListManager={(spotId) => setListManagerSpotId(spotId)}
                       onEditSpot={handleOpenEditSpot}
+                      activeTab={activeTab}
+                      onSelectTab={setActiveTab}
                     />
                   </main>
                 </div>
@@ -2147,7 +2218,7 @@ export default function App() {
                     className="h-[44vh] sm:h-[50%] md:h-[52%] min-h-[260px] relative w-full bg-slate-100 border-b border-slate-200 flex-shrink-0"
                   >
                     <JapanMap
-                      spots={spots}
+                      spots={displayedSpotsForMap}
                       selectedSpotId={selectedSpotId}
                       selectedSpotIds={selectedSpotIds}
                       onSelectSpot={handleSelectSpot}
@@ -2174,6 +2245,8 @@ export default function App() {
                       customLists={customLists}
                       onOpenListManager={(spotId) => setListManagerSpotId(spotId)}
                       onEditSpot={handleOpenEditSpot}
+                      activeTab={activeTab}
+                      onSelectTab={setActiveTab}
                     />
                   </main>
 
@@ -2221,6 +2294,7 @@ export default function App() {
                       onDeleteSpot={handleDeleteSpot}
                       onOpenCloudSync={() => setIsCloudSyncModalOpen(true)}
                       isCloudSyncActive={!!currentUser}
+                      onFilteredSpotsChange={handleFilteredSpotsChange}
                     />
                   </section>
                 </div>
@@ -2250,6 +2324,7 @@ export default function App() {
         customLists={customLists}
         onOpenListManager={(spotId) => setListManagerSpotId(spotId)}
         onToggleLocationEnabled={handleToggleLocationEnabled}
+        hasActiveRouteCard={selectedSpotIds.length > 0}
       />
 
       {/* Create / Edit Custom List Modal */}
@@ -2403,6 +2478,32 @@ export default function App() {
         onExportJson={handleExportData}
         onImportJson={handleImportData}
         showToast={showToast}
+        currentUser={currentUser}
+        hasToken={hasToken}
+        syncFileId={syncFileId}
+        cloudMeta={cloudMeta}
+        lastSyncTime={lastSyncTime}
+        isSyncing={isSyncing}
+        onSaveToGoogleDrive={handleForceOverwriteCloud}
+        onRestoreFromGoogleDrive={handleRestoreFromCloud}
+        onRestoreFullData={(fullData) => {
+          if (fullData.spots) {
+            setSpots(deduplicateSpots(fullData.spots));
+            setSelectedSpotId(null);
+            setSelectedSpotIds([]);
+          }
+          if (fullData.categories && fullData.categories.length > 0) {
+            setCategories(deduplicateCategories(fullData.categories));
+          }
+          if (fullData.customLists && fullData.customLists.length > 0) {
+            setCustomLists(deduplicateCustomLists(fullData.customLists));
+          }
+        }}
+        onSignInGoogle={handleSignIn}
+        onOpenCloudSync={() => {
+          setIsDataModalOpen(false);
+          setIsCloudSyncModalOpen(true);
+        }}
       />
 
       {/* Notification Toast */}

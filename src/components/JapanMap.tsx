@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import L from 'leaflet';
-import { Spot, CustomCategory, UserLocation, SpotRouteInfo, MultiSpotRouteResult, CustomList } from '../types';
+import { Spot, CustomCategory, UserLocation, SpotRouteInfo, MultiSpotRouteResult, CustomList, SpotListTab } from '../types';
 import {
   REGIONAL_CENTERS,
   JAPAN_PREFECTURES,
@@ -80,6 +80,8 @@ interface JapanMapProps {
   customLists?: CustomList[];
   onOpenListManager?: (spotId: string) => void;
   onEditSpot?: (spot: Spot) => void;
+  activeTab?: SpotListTab;
+  onSelectTab?: (tab: SpotListTab) => void;
 }
 
 type TileType = 'dark' | 'carto' | 'osm' | 'gsi';
@@ -133,6 +135,8 @@ export const JapanMap: React.FC<JapanMapProps> = ({
   customLists = [],
   onOpenListManager,
   onEditSpot,
+  activeTab,
+  onSelectTab,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
@@ -281,6 +285,46 @@ export const JapanMap: React.FC<JapanMapProps> = ({
       return true;
     });
   }, [spots, selectedPrefecture]);
+
+  // 選択中のリスト情報
+  const activeList = useMemo(() => {
+    if (!activeTab || activeTab === 'all') return null;
+    if (activeTab === 'want_to_go') {
+      return { id: 'want_to_go', name: '行きたい場所', icon: '📌', color: '#f59e0b' };
+    }
+    if (activeTab === 'haunted') {
+      return { id: 'haunted', name: '心リスト', icon: '👻', color: '#8b5cf6' };
+    }
+    if (activeTab === 'prefecture') {
+      return { id: 'prefecture', name: '県別リスト', icon: '🗾', color: '#06b6d4' };
+    }
+    const found = customLists?.find((cl) => cl.id === activeTab);
+    if (found) {
+      return { id: found.id, name: found.name, icon: found.icon || '⭐', color: found.color || '#3b82f6' };
+    }
+    return null;
+  }, [activeTab, customLists]);
+
+  // リスト（タブ）切り替え時に、該当リストのピンが収まるようにカメラをスムーズに移動
+  const prevActiveTabRef = useRef<SpotListTab | undefined>(activeTab);
+  useEffect(() => {
+    if (prevActiveTabRef.current !== activeTab) {
+      prevActiveTabRef.current = activeTab;
+      const map = mapInstanceRef.current;
+      if (!map) return;
+
+      if (activeTab && activeTab !== 'all') {
+        if (visibleSpots.length === 1) {
+          map.flyTo([visibleSpots[0].lat, visibleSpots[0].lng], Math.max(map.getZoom(), 12), { duration: 0.8 });
+        } else if (visibleSpots.length > 1) {
+          const bounds = L.latLngBounds(visibleSpots.map((s) => [s.lat, s.lng]));
+          if (bounds.isValid()) {
+            map.flyToBounds(bounds, { padding: [60, 60], maxZoom: 13, duration: 0.8 });
+          }
+        }
+      }
+    }
+  }, [activeTab, visibleSpots]);
 
   // Initialize Map: 全てのブラウザ・スマホ・PCで最適なサイズになるレスポンシブ初期化
   useEffect(() => {
@@ -1338,83 +1382,134 @@ export const JapanMap: React.FC<JapanMapProps> = ({
               </button>
             </div>
           )}
+
+          {/* 選択中のリストバッジ（リストに該当するものだけピン表示中） */}
+          {activeList && (
+            <div
+              id="map-active-list-badge"
+              className="flex items-center gap-1.5 sm:gap-2 bg-slate-900/95 backdrop-blur-md text-white px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl shadow-lg border text-[11px] sm:text-xs font-bold w-fit animate-in fade-in select-none"
+              style={{ borderLeftWidth: '4px', borderLeftColor: activeList.color }}
+            >
+              <span className="text-sm">{activeList.icon}</span>
+              <span className="truncate max-w-[150px] sm:max-w-[220px]">「{activeList.name}」表示中</span>
+              <span
+                className="px-1.5 py-0.2 rounded-full text-[10px] font-black"
+                style={{ backgroundColor: `${activeList.color}25`, color: activeList.color }}
+              >
+                {visibleSpots.length}件
+              </span>
+              {onSelectTab && (
+                <button
+                  type="button"
+                  onClick={() => onSelectTab('all')}
+                  className="ml-1 text-slate-400 hover:text-white p-0.5 rounded-full hover:bg-slate-800 transition-colors cursor-pointer"
+                  title="全リストのピン表示に戻す"
+                >
+                  <X className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
 
-      {/* Top Right Controls: Route Select Mode & Manual Location Toggle (常に表示・固定) */}
-      <div id="map-top-right-controls" className="absolute top-2 right-2 sm:top-4 sm:right-4 z-[700] flex flex-col gap-1.5 sm:gap-2 items-end pointer-events-auto">
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          {/* ルート複数選択モードのトグルボタン (ON/OFF 切り替え) */}
-          <button
-            type="button"
-            id="map-route-multiselect-toggle-btn"
-            onClick={() => {
-              const nextMode = !isRouteSelectMode;
-              setIsRouteSelectMode(nextMode);
-              if (nextMode) {
-                setShowRouteDrawer(true);
-                // もしすでにピンが1つ単一選択されていて、ルート一覧に未追加なら追加する
-                if (selectedSpotId && !selectedSpotIds.includes(selectedSpotId)) {
-                  onToggleSelectSpot(selectedSpotId);
-                }
-              }
-            }}
-            className={`px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl shadow-md sm:shadow-lg backdrop-blur-md border text-[11px] sm:text-xs font-bold flex items-center gap-1 sm:gap-1.5 cursor-pointer transition-all select-none whitespace-nowrap ${
-              isRouteSelectMode
-                ? 'bg-emerald-600 text-white border-emerald-400 ring-2 ring-emerald-300 shadow-emerald-500/30'
-                : selectedSpotsInOrder.length > 0
-                ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
-                : 'bg-white/95 text-slate-700 border-slate-200/90 hover:bg-slate-50'
+      {/* Top Right Controls: Route Select Mode & Manual Location Toggle
+          詳細カードが開いている時は、重なりを自動回避するため地図の空いている左上エリアへ自動移動 */}
+      {(() => {
+        const hasTopBanner = Boolean(isRouteSelectMode || selectedSpotsInOrder.length > 0 || !!selectedSpotId);
+        return (
+          <div
+            id="map-top-right-controls"
+            className={`absolute z-[700] flex flex-col gap-1.5 sm:gap-2 pointer-events-auto transition-all duration-300 ease-in-out ${
+              isDetailModalOpen
+                ? hasTopBanner
+                  ? 'top-14 sm:top-15 left-2 sm:left-4 items-start'
+                  : 'top-3 sm:top-4 left-2 sm:left-4 items-start'
+                : 'top-3 right-2 sm:top-4 sm:right-4 items-end'
             }`}
-            title={isRouteSelectMode ? 'ルート複数選択をOFFにする（ピン個別選択モード）' : 'ルート複数選択をONにする（連続ピン選択でルート作成）'}
           >
-            <RouteIcon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isRouteSelectMode ? 'text-white' : 'text-emerald-600'}`} />
-            <span>
-              {isRouteSelectMode
-                ? `ルート複数選択: ON${selectedSpotsInOrder.length > 0 ? ` (${selectedSpotsInOrder.length})` : ''}`
-                : `ルート複数選択: OFF${selectedSpotsInOrder.length > 0 ? ` (${selectedSpotsInOrder.length})` : ''}`}
-            </span>
-          </button>
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              {/* ルート複数選択モードのトグルボタン (ON/OFF 切り替え) */}
+              <button
+                type="button"
+                id="map-route-multiselect-toggle-btn"
+                onClick={() => {
+                  const nextMode = !isRouteSelectMode;
+                  setIsRouteSelectMode(nextMode);
+                  if (nextMode) {
+                    setShowRouteDrawer(true);
+                    // もしすでにピンが1つ単一選択されていて、ルート一覧に未追加なら追加する
+                    if (selectedSpotId && !selectedSpotIds.includes(selectedSpotId)) {
+                      onToggleSelectSpot(selectedSpotId);
+                    }
+                  }
+                }}
+                className={`px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl shadow-md sm:shadow-lg backdrop-blur-md border text-[11px] sm:text-xs font-bold flex items-center gap-1 sm:gap-1.5 cursor-pointer transition-all select-none whitespace-nowrap ${
+                  isRouteSelectMode
+                    ? 'bg-emerald-600 text-white border-emerald-400 ring-2 ring-emerald-300 shadow-emerald-500/30'
+                    : selectedSpotsInOrder.length > 0
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
+                    : 'bg-white/95 text-slate-700 border-slate-200/90 hover:bg-slate-50'
+                }`}
+                title={isRouteSelectMode ? 'ルート複数選択をOFFにする（ピン個別選択モード）' : 'ルート複数選択をONにする（連続ピン選択でルート作成）'}
+              >
+                <RouteIcon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isRouteSelectMode ? 'text-white' : 'text-emerald-600'}`} />
+                <span>
+                  {isRouteSelectMode
+                    ? `ルート複数選択: ON${selectedSpotsInOrder.length > 0 ? ` (${selectedSpotsInOrder.length})` : ''}`
+                    : `ルート複数選択: OFF${selectedSpotsInOrder.length > 0 ? ` (${selectedSpotsInOrder.length})` : ''}`}
+                </span>
+              </button>
 
-          {/* 手動切り替え (ON / OFF) 現在地ボタン */}
-          <button
-            type="button"
-            id="map-location-toggle-btn"
-            onClick={onToggleLocationEnabled}
-            className={`px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl shadow-md sm:shadow-lg backdrop-blur-md border text-[11px] sm:text-xs font-bold flex items-center gap-1 sm:gap-1.5 cursor-pointer transition-all select-none whitespace-nowrap ${
-              isLocationEnabled
-                ? 'bg-blue-600 text-white border-blue-500 hover:bg-blue-700 shadow-blue-500/20'
-                : 'bg-white/95 text-slate-700 border-slate-200/90 hover:bg-slate-50'
-            }`}
-            title={isLocationEnabled ? '現在地機能をOFFにする' : '現在地機能をONにする（手動）'}
-          >
-            {isLocating ? (
-              <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin text-blue-200" />
-            ) : isLocationEnabled ? (
-              <Navigation className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white animate-pulse" />
-            ) : (
-              <NavigationOff className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400" />
+              {/* 手動切り替え (ON / OFF) 現在地ボタン */}
+              <button
+                type="button"
+                id="map-location-toggle-btn"
+                onClick={onToggleLocationEnabled}
+                className={`px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl shadow-md sm:shadow-lg backdrop-blur-md border text-[11px] sm:text-xs font-bold flex items-center gap-1 sm:gap-1.5 cursor-pointer transition-all select-none whitespace-nowrap ${
+                  isLocationEnabled
+                    ? 'bg-blue-600 text-white border-blue-500 hover:bg-blue-700 shadow-blue-500/20'
+                    : 'bg-white/95 text-slate-700 border-slate-200/90 hover:bg-slate-50'
+                }`}
+                title={isLocationEnabled ? '現在地機能をOFFにする' : '現在地機能をONにする（手動）'}
+              >
+                {isLocating ? (
+                  <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin text-blue-200" />
+                ) : isLocationEnabled ? (
+                  <Navigation className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white animate-pulse" />
+                ) : (
+                  <NavigationOff className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400" />
+                )}
+                <span>現在地: {isLocationEnabled ? 'ON' : 'OFF'}</span>
+              </button>
+            </div>
+
+            {isAddMode && (
+              <div className="bg-emerald-600 text-white px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl shadow-lg text-[11px] sm:text-xs font-bold flex items-center gap-1.5 animate-pulse border border-emerald-400 select-none">
+                <MapPin className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <span>地図をタップしてピン設置</span>
+              </div>
             )}
-            <span>現在地: {isLocationEnabled ? 'ON' : 'OFF'}</span>
-          </button>
-        </div>
-
-        {isAddMode && (
-          <div className="bg-emerald-600 text-white px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl shadow-lg text-[11px] sm:text-xs font-bold flex items-center gap-1.5 animate-pulse border border-emerald-400 select-none">
-            <MapPin className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            <span>地図をタップしてピン設置</span>
           </div>
-        )}
-      </div>
+        );
+      })()}
 
-      {/* Top Center: Route Selection Active Banner & 現在地からの距離・走行時間HUD (ルート詳細常時表示) */}
+      {/* Top Center: Route Selection Active Banner & 現在地からの距離・走行時間HUD
+          詳細カードが開いている時は、重なりを自動回避するため上部左寄りの安全エリアへ移動 */}
       {(isRouteSelectMode || selectedSpotsInOrder.length > 0 || !!selectedSpotId) && (() => {
         const activeSpot = selectedSpotsInOrder[0] || (selectedSpotId ? spots.find((s) => s.id === selectedSpotId) : null);
         const activeRoute = activeSpot ? routesInfo[activeSpot.id] : null;
         const hasRouteInfo = activeRoute && activeRoute.status === 'success' && activeRoute.distanceKm > 0;
 
         return (
-          <div id="map-top-center-banner" className="absolute top-14 md:top-4 left-1/2 -translate-x-1/2 z-[650] bg-slate-950 text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.85)] border-2 border-sky-400 flex items-center gap-2 sm:gap-2.5 text-[11px] sm:text-xs font-bold animate-in fade-in slide-in-from-top-2 max-w-[96vw] sm:max-w-[85vw] select-none">
+          <div
+            id="map-top-center-banner"
+            className={`absolute z-[650] bg-slate-950 text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.85)] border-2 border-sky-400 flex items-center gap-2 sm:gap-2.5 text-[11px] sm:text-xs font-bold animate-in fade-in transition-all duration-300 ease-in-out select-none ${
+              isDetailModalOpen
+                ? 'top-3 sm:top-3.5 left-2 sm:left-4 translate-x-0 max-w-[clamp(280px,calc(50vw-2rem),480px)]'
+                : 'top-14 md:top-4 left-1/2 -translate-x-1/2 max-w-[96vw] sm:max-w-[85vw]'
+            }`}
+          >
             {/* Live indicator dot */}
             <span className="relative flex h-2.5 w-2.5 flex-shrink-0">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
@@ -1428,7 +1523,7 @@ export const JapanMap: React.FC<JapanMapProps> = ({
                   巡回 {selectedSpotsInOrder.length}箇所
                 </span>
                 <span className="text-white font-black text-xs sm:text-sm tracking-tight flex-shrink-0 bg-slate-900 px-2 py-0.5 rounded-md border border-slate-700">
-                  🚗 {multiSpotRoute ? `${multiSpotRoute.totalDistanceKm}km` : '計算中'}
+                  🚗 {multiSpotRoute ? formatDistanceJapanese(multiSpotRoute.totalDistanceKm) : '計算中'}
                 </span>
                 <span className="text-sky-300 font-black bg-sky-950 px-2 py-0.5 rounded-md border border-sky-500/50 text-[10px] sm:text-[11px] flex-shrink-0">
                   下道 約{multiSpotRoute ? formatDurationJapanese(multiSpotRoute.totalDurationMinutes) : '...'}
@@ -1588,7 +1683,9 @@ export const JapanMap: React.FC<JapanMapProps> = ({
             {selectedSpotsInOrder.map((spot, idx) => {
               const isLast = idx === selectedSpotsInOrder.length - 1;
               const leg = multiSpotRoute?.legs?.[idx];
-              const dist = leg ? `${leg.distanceKm}km` : (routesInfo[spot.id]?.status === 'success' ? `${routesInfo[spot.id].distanceKm}km` : '');
+              const dist = leg
+                ? formatDistanceJapanese(leg.distanceKm)
+                : (routesInfo[spot.id]?.status === 'success' ? formatDistanceJapanese(routesInfo[spot.id].distanceKm) : '');
               return (
                 <div key={spot.id} className="flex items-center justify-between text-xs py-1.5 px-2.5 rounded-xl bg-slate-900/80 border border-slate-800">
                   <div className="flex items-center gap-2 truncate">
@@ -1644,9 +1741,17 @@ export const JapanMap: React.FC<JapanMapProps> = ({
         </div>
       )}
 
-      {/* Floating Panel (Bottom-Left): PC版 複数選択ピンの下道ルート計算カード */}
+      {/* Floating Panel (Bottom-Left): PC版 複数選択ピンの下道ルート計算カード
+          詳細カード（右側）が開いている時は重なりを防ぐため幅と高さを自動調整し、画面サイズ・マップ領域に合わせてレスポンシブに伸縮 */}
       {selectedSpotsInOrder.length > 0 && showRouteDrawer && (
-        <div className="hidden sm:flex absolute bottom-4 left-4 sm:right-auto sm:w-full sm:max-w-md max-w-[calc(100vw-1.5rem)] z-[700] bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200/90 overflow-hidden animate-in slide-in-from-bottom duration-300 flex-col max-h-[75vh]">
+        <div
+          id="map-route-floating-panel"
+          className={`hidden sm:flex absolute bottom-4 left-4 z-[700] bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200/90 overflow-hidden animate-in slide-in-from-bottom duration-300 flex-col transition-all ease-in-out ${
+            isDetailModalOpen
+              ? 'w-[clamp(260px,calc(48%-1rem),410px)] max-h-[min(65vh,calc(100vh-140px))]'
+              : 'w-[clamp(280px,calc(56%-1rem),460px)] max-h-[min(74vh,calc(100vh-120px))]'
+          }`}
+        >
           {/* Header */}
           <div className="px-4 py-3 bg-gradient-to-r from-emerald-800 via-teal-900 to-slate-900 text-white flex flex-col gap-2.5">
             <div className="flex items-center justify-between gap-2">
@@ -1761,7 +1866,7 @@ export const JapanMap: React.FC<JapanMapProps> = ({
           </div>
 
           {/* Spot List & Legs in Route */}
-          <div className="p-3 overflow-y-auto max-h-[46vh] space-y-1.5">
+          <div className="p-3 overflow-y-auto flex-1 min-h-0 max-h-[min(38vh,calc(100vh-320px))] space-y-1.5">
             {selectedSpotsInOrder.map((spot, index) => {
               const isCurrent = spot.id === selectedSpotId;
               const leg = multiSpotRoute?.legs?.find((l) => l.fromSpotId === spot.id);
