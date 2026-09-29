@@ -116,18 +116,23 @@ export async function uploadSyncData(
       body: JSON.stringify(data, null, 2),
     });
 
-    if (!response.ok) {
+    if (response.ok) {
+      const updated = await response.json();
+      return {
+        fileId: updated.id,
+        modifiedTime: updated.modifiedTime || new Date().toISOString(),
+      };
+    }
+
+    if (response.status === 404) {
+      console.warn(`Drive file ${existingFileId} not found (404). Falling back to creating a new sync file.`);
+      // Proceed to create a new file below
+    } else {
       throw new GoogleDriveApiError(
         `Google Drive同期データの更新に失敗しました (${response.status})`,
         response.status
       );
     }
-
-    const updated = await response.json();
-    return {
-      fileId: updated.id,
-      modifiedTime: updated.modifiedTime || new Date().toISOString(),
-    };
   }
 
   // Create new file with multipart upload

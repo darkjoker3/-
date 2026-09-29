@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Spot, CustomCategory, UserLocation, SpotRouteInfo, CustomList } from '../types';
 import { getCategoryDisplay, INITIAL_CATEGORIES } from '../data/sampleSpots';
 import { formatDistanceJapanese, formatDurationJapanese, getGoogleMapsLocalRoadUrl } from '../utils/routeUtils';
@@ -71,6 +71,95 @@ export const SpotDetailModal: React.FC<SpotDetailModalProps> = ({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
 
+  // 上のバー（ヘッダー・即ピン設置バー・マップ内コマンド等）にかぶらないよう動的に最大高さを算出
+  const [maxAvailableHeight, setMaxAvailableHeight] = useState<number>(480);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const calculateMaxHeight = () => {
+      // 画面上部に存在するすべてのバー・コマンド要素を検索
+      const headerEl = document.querySelector('header');
+      const quickPinEl = document.getElementById('quick-pin-bar-container');
+      const mobileFilterEl = document.getElementById('mobile-filter-bar');
+      const mapTopRightEl = document.getElementById('map-top-right-controls');
+      const mapTopCenterEl = document.getElementById('map-top-center-banner');
+      const mapTopLeftEl = document.getElementById('map-top-left-controls');
+      const routeToggleEl = document.getElementById('map-route-multiselect-toggle-btn');
+      const locToggleEl = document.getElementById('map-location-toggle-btn');
+
+      const candidateElements = [
+        headerEl,
+        quickPinEl,
+        mobileFilterEl,
+        mapTopRightEl,
+        mapTopCenterEl,
+        mapTopLeftEl,
+        routeToggleEl,
+        locToggleEl,
+      ];
+
+      let maxObstacleBottom = 0;
+      for (const el of candidateElements) {
+        if (el) {
+          const rect = el.getBoundingClientRect();
+          if (rect.height > 0 && rect.bottom > maxObstacleBottom) {
+            maxObstacleBottom = rect.bottom;
+          }
+        }
+      }
+
+      const isMobile = window.innerWidth < 640;
+      // 要素が未取得の場合の安全マージンフォールバック
+      if (maxObstacleBottom <= 0) {
+        maxObstacleBottom = isMobile ? 168 : 156;
+      }
+
+      // 上部バーやコマンドとの間の安全マージン（12px）
+      const topClearance = 12;
+      const minAllowedTop = maxObstacleBottom + topClearance;
+
+      // 下部余白（モバイルは下部ナビ+余白で約76px、PCは下部16px+余白で約24px）
+      const bottomSpace = isMobile ? 76 : 24;
+
+      const vh = window.innerHeight;
+      // 上のバー・コマンドの下端〜下部マージンまでの有効高さ
+      const available = vh - minAllowedTop - bottomSpace;
+
+      // 最小160px〜利用可能高さの範囲で自動設定
+      const calculated = Math.max(160, Math.floor(available));
+      setMaxAvailableHeight(calculated);
+    };
+
+    calculateMaxHeight();
+
+    // ResizeObserverで画面やバーのサイズ変化を常に監視
+    let resizeObserver: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => calculateMaxHeight());
+      const elementsToWatch = [
+        document.body,
+        document.querySelector('header'),
+        document.getElementById('quick-pin-bar-container'),
+        document.getElementById('mobile-filter-bar'),
+        document.getElementById('map-top-right-controls'),
+        document.getElementById('map-top-center-banner'),
+      ];
+      elementsToWatch.forEach((el) => {
+        if (el) resizeObserver?.observe(el);
+      });
+    }
+
+    window.addEventListener('resize', calculateMaxHeight);
+    window.addEventListener('scroll', calculateMaxHeight, { passive: true });
+
+    return () => {
+      window.removeEventListener('resize', calculateMaxHeight);
+      window.removeEventListener('scroll', calculateMaxHeight);
+      if (resizeObserver) resizeObserver.disconnect();
+    };
+  }, [isOpen]);
+
   if (!isOpen || !spot) return null;
 
   const photos = spot.photos && spot.photos.length > 0 ? spot.photos : [];
@@ -98,7 +187,7 @@ export const SpotDetailModal: React.FC<SpotDetailModalProps> = ({
         id={isExpanded ? 'spot-detail-modal-backdrop' : 'spot-detail-docked-panel'}
         className={
           isExpanded
-            ? 'fixed inset-0 z-[1200] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200'
+            ? 'fixed inset-0 z-[1200] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-200'
             : 'fixed bottom-16 sm:bottom-4 left-3 right-3 sm:left-auto sm:right-6 z-[1200] w-auto sm:w-full sm:max-w-lg md:max-w-xl max-w-[95vw] pointer-events-none flex flex-col justify-end p-0 animate-in slide-in-from-bottom-4 duration-200'
         }
         onClick={(e) => {
@@ -107,10 +196,13 @@ export const SpotDetailModal: React.FC<SpotDetailModalProps> = ({
       >
         <div
           id="spot-detail-modal-content"
+          style={{
+            maxHeight: isExpanded ? 'calc(90vh - 40px)' : `${maxAvailableHeight}px`,
+          }}
           className={
             isExpanded
-              ? 'bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[min(650px,calc(92vh-50px))] animate-in fade-in duration-200 border border-slate-100'
-              : 'pointer-events-auto bg-white w-full h-[min(650px,calc(100vh-4.5rem-50px))] max-h-[min(650px,calc(100vh-4.5rem-50px))] rounded-2xl shadow-2xl border border-slate-200/90 overflow-hidden flex flex-col text-slate-800 ring-1 ring-black/5'
+              ? 'bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in duration-200 border border-slate-100'
+              : 'pointer-events-auto bg-white w-full rounded-2xl shadow-2xl border border-slate-200/90 overflow-hidden flex flex-col text-slate-800 ring-1 ring-black/5 transition-all duration-150'
           }
         >
           {/* Header */}
@@ -248,7 +340,7 @@ export const SpotDetailModal: React.FC<SpotDetailModalProps> = ({
           )}
 
           {/* Scrollable Content */}
-          <div className={`flex-1 overflow-y-auto ${isExpanded ? 'p-5 space-y-5' : 'p-3.5 space-y-3.5'}`}>
+          <div className={`flex-1 min-h-0 overflow-y-auto ${isExpanded ? 'p-5 space-y-5' : 'p-3.5 space-y-3.5'}`}>
             {/* Title & Rating & Custom Lists */}
             <div>
               <div className="flex items-start justify-between gap-3">
@@ -625,12 +717,12 @@ export const SpotDetailModal: React.FC<SpotDetailModalProps> = ({
           </div>
 
           {/* Footer Action Buttons */}
-          <div className="p-4 border-t border-slate-100 bg-slate-50/80 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap">
+          <div className="p-3 sm:p-3.5 border-t border-slate-100 bg-slate-50/80 flex flex-wrap items-center justify-between gap-2 flex-shrink-0">
+            <div className="flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto flex-wrap">
               <button
                 id="footer-edit-spot-btn"
                 onClick={() => onEdit(spot)}
-                className="flex-1 sm:flex-initial px-4 py-2 bg-violet-600 hover:bg-violet-700 active:bg-violet-800 text-white text-xs font-bold rounded-xl shadow-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                className="flex-1 sm:flex-initial px-3 sm:px-4 py-1.5 sm:py-2 bg-violet-600 hover:bg-violet-700 active:bg-violet-800 text-white text-xs font-bold rounded-xl shadow-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                 title="スポット内容（タイトル、カテゴリ、メモ、写真、URL）を編集"
               >
                 <Edit3 className="w-3.5 h-3.5" />
@@ -641,7 +733,7 @@ export const SpotDetailModal: React.FC<SpotDetailModalProps> = ({
                 href={googleMapsUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex-1 sm:flex-initial px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold rounded-xl border border-slate-200 shadow-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                className="flex-1 sm:flex-initial px-3 sm:px-4 py-1.5 sm:py-2 bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold rounded-xl border border-slate-200 shadow-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
               >
                 <ExternalLink className="w-3.5 h-3.5 text-blue-600" />
                 <span>Googleマップで開く</span>
@@ -651,7 +743,7 @@ export const SpotDetailModal: React.FC<SpotDetailModalProps> = ({
                 href={localRoadNavUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex-1 sm:flex-initial px-4 py-2 bg-violet-50 hover:bg-violet-100 text-violet-700 text-xs font-bold rounded-xl border border-violet-200 shadow-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                className="flex-1 sm:flex-initial px-3 sm:px-4 py-1.5 sm:py-2 bg-violet-50 hover:bg-violet-100 text-violet-700 text-xs font-bold rounded-xl border border-violet-200 shadow-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
               >
                 <Car className="w-3.5 h-3.5 text-violet-600" />
                 <span>下道ルート案内</span>
@@ -660,7 +752,7 @@ export const SpotDetailModal: React.FC<SpotDetailModalProps> = ({
 
             <button
               onClick={onClose}
-              className="w-full sm:w-auto px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors cursor-pointer"
+              className="w-full sm:w-auto px-4 py-1.5 sm:py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors cursor-pointer"
             >
               閉じる
             </button>

@@ -63,6 +63,7 @@ export const MobileFilterBar: React.FC<MobileFilterBarProps> = ({
 
   return (
     <header
+      id="mobile-filter-bar"
       role="search"
       aria-label="検索とフィルター"
       className="flex-shrink-0 bg-slate-950/98 backdrop-blur-md border-b border-slate-800/80 text-slate-100 px-3 pt-2 pb-2 flex flex-col gap-2 z-30 shadow-md"

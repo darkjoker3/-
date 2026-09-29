@@ -50,6 +50,7 @@ import {
   googleSignIn,
   googleSignOut,
   getAccessToken,
+  setCachedAccessToken,
 } from './services/firebaseAuth';
 import {
   searchSyncFile,
@@ -59,6 +60,7 @@ import {
   CloudSyncData,
   DriveFileMeta,
   SYNC_FILE_NAME,
+  GoogleDriveApiError,
 } from './services/googleDriveService';
 import {
   smartMergeSyncData,
@@ -232,6 +234,7 @@ export default function App() {
   // Cloud Sync (Google Drive) states
   const [isCloudSyncModalOpen, setIsCloudSyncModalOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [hasToken, setHasToken] = useState<boolean>(() => Boolean(getAccessToken()));
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<number | null>(() => {
     try {
@@ -439,6 +442,7 @@ export default function App() {
     const unsubscribe = initAuth(
       async (user, token) => {
         setCurrentUser(user);
+        setHasToken(true);
         try {
           const fileMeta = await searchSyncFile(token);
           if (fileMeta) {
@@ -447,13 +451,35 @@ export default function App() {
             localStorage.setItem(SYNC_FILE_ID_KEY, fileMeta.id);
             const downloaded = await downloadSyncData(token, fileMeta.id);
             setCloudData(downloaded);
+
+            // リモートが新しい場合、自動でスマート統合
+            const remoteTime = new Date(fileMeta.modifiedTime).getTime();
+            const localLastSync = lastSyncTime || 0;
+            if (remoteTime > localLastSync + 5000) {
+              const { mergedSpots, mergedCategories, mergedCustomLists } = smartMergeSyncData(
+                { spots, categories, customLists },
+                downloaded
+              );
+              setSpots(mergedSpots);
+              setCategories(mergedCategories);
+              setCustomLists(mergedCustomLists);
+              setLastSyncTime(remoteTime);
+              localStorage.setItem(LAST_SYNC_KEY, String(remoteTime));
+              setHasPendingChanges(false);
+            }
           }
         } catch (e) {
           console.warn('Initial cloud sync check:', e);
         }
       },
+      (user) => {
+        // Firebaseログイン状態は維持し、Driveトークンのみ要再取得状態にする
+        setCurrentUser(user);
+        setHasToken(false);
+      },
       () => {
         setCurrentUser(null);
+        setHasToken(false);
       }
     );
     return () => unsubscribe();
@@ -464,6 +490,7 @@ export default function App() {
     try {
       const { user, accessToken } = await googleSignIn();
       setCurrentUser(user);
+      setHasToken(true);
       showToast(`Googleアカウント（${user.displayName || user.email}）に接続しました`, 'success');
 
       setIsSyncing(true);
@@ -534,6 +561,8 @@ export default function App() {
     try {
       await googleSignOut();
       setCurrentUser(null);
+      setHasToken(false);
+      setHasPendingChanges(false);
       showToast('Googleアカウントからログアウトしました', 'info');
     } catch (err: unknown) {
       console.error('Google Sign Out failed:', err);
@@ -714,7 +743,7 @@ export default function App() {
     }
   };
 
-  // Debounced Auto-sync on data change
+  // Debounced Auto-sync on data change (更新内容をGoogle Driveへ自動保存)
   const isInitialMount = useRef(true);
   useEffect(() => {
     if (isInitialMount.current) {
@@ -735,23 +764,47 @@ export default function App() {
           uiScale,
           isLocationEnabled,
         });
-        const res = await uploadSyncData(token, payload, syncFileId || undefined);
-        if (!syncFileId) {
+
+        let targetFileId = syncFileId;
+        if (!targetFileId) {
+          try {
+            const found = await searchSyncFile(token);
+            if (found) {
+              targetFileId = found.id;
+              setSyncFileId(found.id);
+              localStorage.setItem(SYNC_FILE_ID_KEY, found.id);
+            }
+          } catch {
+            // ignore search error
+          }
+        }
+
+        const res = await uploadSyncData(token, payload, targetFileId || undefined);
+        if (!targetFileId || targetFileId !== res.fileId) {
           setSyncFileId(res.fileId);
           localStorage.setItem(SYNC_FILE_ID_KEY, res.fileId);
         }
-        setCloudMeta((prev) => (prev ? { ...prev, modifiedTime: res.modifiedTime } : { id: res.fileId, name: SYNC_FILE_NAME, modifiedTime: res.modifiedTime }));
+        setCloudMeta((prev) =>
+          prev
+            ? { ...prev, id: res.fileId, modifiedTime: res.modifiedTime }
+            : { id: res.fileId, name: SYNC_FILE_NAME, modifiedTime: res.modifiedTime }
+        );
         setCloudData(payload);
         const now = Date.now();
         setLastSyncTime(now);
         localStorage.setItem(LAST_SYNC_KEY, String(now));
         setHasPendingChanges(false);
-      } catch (err) {
+      } catch (err: unknown) {
         console.warn('Auto sync save error:', err);
+        if (err instanceof GoogleDriveApiError && err.isTokenExpired) {
+          setCachedAccessToken(null);
+          setHasToken(false);
+          showToast('Google Driveの認証有効期限が切れました。Drive同期ボタンから再接続してください', 'info');
+        }
       } finally {
         setIsSyncing(false);
       }
-    }, 2500);
+    }, 1200);
 
     return () => clearTimeout(timer);
   }, [spots, categories, customLists, currentUser, autoSyncEnabled, syncFileId, uiScale, isLocationEnabled]);
@@ -1778,22 +1831,42 @@ export default function App() {
                 {/* Google Drive Cloud Sync Modal Trigger */}
                 <button
                   id="header-cloud-sync-btn"
-                  onClick={() => setIsCloudSyncModalOpen(true)}
+                  onClick={() => {
+                    if (currentUser && !hasToken) {
+                      handleSignIn();
+                    } else {
+                      setIsCloudSyncModalOpen(true);
+                    }
+                  }}
                   className={`px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-2xs transition-all ${
                     currentUser
-                      ? isSyncing
+                      ? !hasToken
+                        ? 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100'
+                        : isSyncing
                         ? 'bg-blue-50 text-blue-700 border-blue-200'
                         : hasPendingChanges
                         ? 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
                         : 'bg-emerald-50/90 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
                       : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
                   }`}
-                  title="Google Driveクラウド同期（自動保存・他端末と同期）"
+                  title={
+                    currentUser
+                      ? !hasToken
+                        ? 'Google Driveトークン再取得が必要です（クリックして再接続）'
+                        : isSyncing
+                        ? 'Google Driveと同期中...'
+                        : hasPendingChanges
+                        ? 'Google Drive自動保存待機中'
+                        : 'Google Drive自動同期中（最新状態）'
+                      : 'Google Driveクラウド同期（自動保存・他端末と同期）'
+                  }
                 >
                   <Cloud
                     className={`w-3.5 h-3.5 ${
                       currentUser
-                        ? isSyncing
+                        ? !hasToken
+                          ? 'text-amber-600'
+                          : isSyncing
                           ? 'animate-spin text-blue-600'
                           : hasPendingChanges
                           ? 'text-amber-600'
@@ -1803,17 +1876,23 @@ export default function App() {
                   />
                   <span className="hidden sm:inline">
                     {currentUser
-                      ? isSyncing
+                      ? !hasToken
+                        ? 'Drive再接続'
+                        : isSyncing
                         ? '同期中...'
                         : hasPendingChanges
-                        ? '未同期あり'
-                        : 'Drive同期中'
+                        ? '自動保存待機'
+                        : 'Drive保存済'
                       : 'Drive同期'}
                   </span>
                   {currentUser && !isSyncing && (
                     <span
                       className={`w-1.5 h-1.5 rounded-full ${
-                        hasPendingChanges ? 'bg-amber-500' : 'bg-emerald-500'
+                        !hasToken
+                          ? 'bg-amber-500 animate-pulse'
+                          : hasPendingChanges
+                          ? 'bg-amber-500'
+                          : 'bg-emerald-500'
                       }`}
                     ></span>
                   )}
@@ -1945,7 +2024,7 @@ export default function App() {
           </header>
 
           {/* Quick Pin Action Bar */}
-          <div className="bg-slate-50/95 border-b border-slate-200 px-2 sm:px-4 py-1.5 shadow-2xs z-10 w-full flex-shrink-0">
+          <div id="quick-pin-bar-container" className="bg-slate-50/95 border-b border-slate-200 px-2 sm:px-4 py-1.5 shadow-2xs z-10 w-full flex-shrink-0">
             <div className="w-full max-w-full mx-auto flex items-center justify-between gap-3">
               <div className="flex-1 max-w-full sm:max-w-2xl">
                 <QuickPinBar
@@ -2268,6 +2347,7 @@ export default function App() {
         isOpen={isCloudSyncModalOpen}
         onClose={() => setIsCloudSyncModalOpen(false)}
         currentUser={currentUser}
+        hasToken={hasToken}
         onSignIn={handleSignIn}
         onSignOut={handleSignOut}
         isSyncing={isSyncing}

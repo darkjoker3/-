@@ -16,6 +16,9 @@ export const auth = getAuth(app);
 // Configure Google Auth Provider with Google Drive file scope
 const provider = new GoogleAuthProvider();
 provider.addScope('https://www.googleapis.com/auth/drive.file');
+provider.setCustomParameters({
+  prompt: 'select_account',
+});
 
 // In-memory token cache (DO NOT store in localStorage per security guidelines)
 let cachedAccessToken: string | null = null;
@@ -26,15 +29,20 @@ let isSigningIn = false;
  */
 export const initAuth = (
   onAuthSuccess?: (user: User, token: string) => void,
+  onUserDetectedWithoutToken?: (user: User) => void,
   onAuthFailure?: () => void
 ) => {
   return onAuthStateChanged(auth, async (user: User | null) => {
     if (user) {
       if (cachedAccessToken) {
         if (onAuthSuccess) onAuthSuccess(user, cachedAccessToken);
-      } else if (!isSigningIn) {
-        // Token is not in memory after page refresh; auth required to get fresh token
-        if (onAuthFailure) onAuthFailure();
+      } else {
+        // User session exists in Firebase Auth, but Google Drive OAuth access token requires user gesture to refresh
+        if (onUserDetectedWithoutToken) {
+          onUserDetectedWithoutToken(user);
+        } else if (onAuthFailure) {
+          onAuthFailure();
+        }
       }
     } else {
       cachedAccessToken = null;

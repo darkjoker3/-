@@ -17,6 +17,7 @@ import {
   MapPin,
   ListOrdered,
   FileCheck2,
+  ExternalLink,
 } from 'lucide-react';
 import { Spot, CustomCategory, CustomList } from '../types';
 import { CloudSyncData, DriveFileMeta } from '../services/googleDriveService';
@@ -26,6 +27,7 @@ interface CloudSyncModalProps {
   isOpen: boolean;
   onClose: () => void;
   currentUser: User | null;
+  hasToken?: boolean;
   onSignIn: () => Promise<void>;
   onSignOut: () => Promise<void>;
   isSyncing: boolean;
@@ -48,6 +50,7 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
   isOpen,
   onClose,
   currentUser,
+  hasToken = true,
   onSignIn,
   onSignOut,
   isSyncing,
@@ -75,17 +78,25 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
 
   const currentDeviceId = getDeviceId();
 
-  const handleSignInClick = async () => {
+  const handleSignInClick = (e?: React.MouseEvent) => {
+    if (e) e.preventDefault();
     setActionError(null);
     setIsSigningIn(true);
-    try {
-      await onSignIn();
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Googleログインに失敗しました';
-      setActionError(msg);
-    } finally {
-      setIsSigningIn(false);
-    }
+    // ユーザー操作の同一コールスタックで直接サインインを起動（非同期待機によるポップアップブロック防止）
+    onSignIn()
+      .catch((err: unknown) => {
+        console.error('Sign in error:', err);
+        const errCode = (err as any)?.code || '';
+        const errMsg = String((err as any)?.message || '');
+        if (errCode === 'auth/popup-blocked' || errMsg.includes('popup-blocked')) {
+          setActionError('popup_blocked');
+        } else {
+          setActionError(err instanceof Error ? err.message : 'Googleログインに失敗しました');
+        }
+      })
+      .finally(() => {
+        setIsSigningIn(false);
+      });
   };
 
   const handleSignOutClick = async () => {
@@ -155,15 +166,51 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
 
         {/* Modal Body */}
         <div className="p-5 overflow-y-auto space-y-4 text-xs text-slate-700">
-          {actionError && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs flex items-start gap-2">
+          {actionError === 'popup_blocked' ? (
+            <div className="p-3.5 bg-amber-50 border border-amber-300 rounded-xl text-amber-900 text-xs space-y-2 animate-in fade-in">
+              <div className="flex items-center gap-2 font-bold text-amber-800 text-xs sm:text-sm">
+                <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                <span>ブラウザのポップアップがブロックされました</span>
+              </div>
+              <p className="text-[11px] text-amber-800 leading-relaxed">
+                Googleログイン認証画面を開くため、ブラウザのポップアップ許可が必要です。
+              </p>
+              <div className="bg-white/90 p-2.5 rounded-lg border border-amber-200 text-[11px] text-slate-700 space-y-1">
+                <div className="font-bold text-slate-800">【許可の手順】</div>
+                <div>1. ブラウザのURL欄（アドレスバー右端）にある 🚫 アイコンをクリック</div>
+                <div>2. 「このサイトのポップアップとリダイレクトを常に許可」を選択して「完了」を押す</div>
+                <div>3. 下の「許可後に再試行」ボタンをクリックしてください</div>
+              </div>
+              <div className="flex items-center gap-2 pt-1 flex-wrap">
+                <button
+                  type="button"
+                  onClick={handleSignInClick}
+                  disabled={isSigningIn}
+                  className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white font-bold rounded-lg transition-colors cursor-pointer text-xs flex items-center gap-1.5 shadow-xs"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isSigningIn ? 'animate-spin' : ''}`} />
+                  <span>許可後に再試行</span>
+                </button>
+                <a
+                  href={window.location.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 font-bold rounded-lg border border-slate-300 transition-colors cursor-pointer text-xs flex items-center gap-1.5 shadow-2xs"
+                >
+                  <ExternalLink className="w-3.5 h-3.5 text-blue-600" />
+                  <span>別タブ（全画面）で開いてログイン</span>
+                </a>
+              </div>
+            </div>
+          ) : actionError ? (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs flex items-start gap-2 animate-in fade-in">
               <AlertTriangle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
               <div className="flex-1">
                 <p className="font-bold">エラーが発生しました</p>
                 <p className="text-[11px] mt-0.5">{actionError}</p>
               </div>
             </div>
-          )}
+          ) : null}
 
           {/* 1. Account Section */}
           {!currentUser ? (
@@ -224,41 +271,61 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
               </button>
             </div>
           ) : (
-            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between">
-              <div className="flex items-center gap-3">
+            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between gap-2 flex-wrap sm:flex-nowrap">
+              <div className="flex items-center gap-3 min-w-0">
                 {currentUser.photoURL ? (
                   <img
                     src={currentUser.photoURL}
                     alt={currentUser.displayName || 'Google User'}
-                    className="w-10 h-10 rounded-full border border-slate-200 shadow-2xs"
+                    className="w-10 h-10 rounded-full border border-slate-200 shadow-2xs flex-shrink-0"
                   />
                 ) : (
-                  <div className="w-10 h-10 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center text-sm shadow-2xs">
+                  <div className="w-10 h-10 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center text-sm shadow-2xs flex-shrink-0">
                     {(currentUser.displayName || currentUser.email || 'G').charAt(0).toUpperCase()}
                   </div>
                 )}
-                <div>
-                  <div className="flex items-center gap-2">
-                    <p className="font-bold text-slate-900 text-xs">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-bold text-slate-900 text-xs truncate">
                       {currentUser.displayName || 'Google ユーザー'}
                     </p>
-                    <span className="inline-flex items-center gap-1 text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.2 rounded-full border border-emerald-200 font-semibold">
-                      <ShieldCheck className="w-3 h-3 text-emerald-600" />
-                      接続中
-                    </span>
+                    {hasToken ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.2 rounded-full border border-emerald-200 font-semibold">
+                        <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                        接続中
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[10px] text-amber-800 bg-amber-100 px-2 py-0.2 rounded-full border border-amber-300 font-bold">
+                        要トークン再取得
+                      </span>
+                    )}
                   </div>
-                  <p className="text-[11px] text-slate-500 font-mono">{currentUser.email}</p>
+                  <p className="text-[11px] text-slate-500 font-mono truncate">{currentUser.email}</p>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={handleSignOutClick}
-                className="px-2.5 py-1.5 rounded-xl border border-slate-200 hover:bg-white text-slate-600 hover:text-red-600 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-                title="ログアウト"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-                <span>ログアウト</span>
-              </button>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {!hasToken && (
+                  <button
+                    type="button"
+                    onClick={handleSignInClick}
+                    disabled={isSigningIn}
+                    className="px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                    title="Google Driveアクセストークンを再取得して同期を再開"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isSigningIn ? 'animate-spin' : ''}`} />
+                    <span>同期を再開</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleSignOutClick}
+                  className="px-2.5 py-1.5 rounded-xl border border-slate-200 hover:bg-white text-slate-600 hover:text-red-600 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                  title="ログアウト"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>ログアウト</span>
+                </button>
+              </div>
             </div>
           )}
 

@@ -1225,7 +1225,7 @@ export const JapanMap: React.FC<JapanMapProps> = ({
 
       {/* Top Left Controls: Tile Layer Selector & Prefecture Modal Button & Fit Bounds */}
       {!isDetailModalOpen && (
-        <div className="absolute top-4 left-4 z-[500] flex flex-col gap-2">
+        <div id="map-top-left-controls" className="absolute top-4 left-4 z-[500] flex flex-col gap-2">
           <div className="flex items-center gap-2">
             {/* Layer Selector */}
             <div className="relative">
@@ -1342,7 +1342,7 @@ export const JapanMap: React.FC<JapanMapProps> = ({
       )}
 
       {/* Top Right Controls: Route Select Mode & Manual Location Toggle (常に表示・固定) */}
-      <div className="absolute top-2 right-2 sm:top-4 sm:right-4 z-[700] flex flex-col gap-1.5 sm:gap-2 items-end pointer-events-auto">
+      <div id="map-top-right-controls" className="absolute top-2 right-2 sm:top-4 sm:right-4 z-[700] flex flex-col gap-1.5 sm:gap-2 items-end pointer-events-auto">
         <div className="flex items-center gap-1.5 sm:gap-2">
           {/* ルート複数選択モードのトグルボタン (ON/OFF 切り替え) */}
           <button
@@ -1414,7 +1414,7 @@ export const JapanMap: React.FC<JapanMapProps> = ({
         const hasRouteInfo = activeRoute && activeRoute.status === 'success' && activeRoute.distanceKm > 0;
 
         return (
-          <div className="absolute top-14 md:top-4 left-1/2 -translate-x-1/2 z-[650] bg-slate-950 text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.85)] border-2 border-sky-400 flex items-center gap-2 sm:gap-2.5 text-[11px] sm:text-xs font-bold animate-in fade-in slide-in-from-top-2 max-w-[96vw] sm:max-w-[85vw] select-none">
+          <div id="map-top-center-banner" className="absolute top-14 md:top-4 left-1/2 -translate-x-1/2 z-[650] bg-slate-950 text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.85)] border-2 border-sky-400 flex items-center gap-2 sm:gap-2.5 text-[11px] sm:text-xs font-bold animate-in fade-in slide-in-from-top-2 max-w-[96vw] sm:max-w-[85vw] select-none">
             {/* Live indicator dot */}
             <span className="relative flex h-2.5 w-2.5 flex-shrink-0">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
