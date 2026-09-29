@@ -43,6 +43,8 @@ import {
   Map as MapIcon,
   ListFilter,
   Cloud,
+  Users,
+  Key,
 } from 'lucide-react';
 import { User } from 'firebase/auth';
 import {
@@ -70,6 +72,18 @@ import {
   SYNC_FILE_ID_KEY,
   AUTO_SYNC_ENABLED_KEY,
 } from './utils/cloudSyncManager';
+import {
+  PASSCODE_STORAGE_KEY,
+  PASSCODE_ROOM_INFO_KEY,
+  PASSCODE_IS_OWNER_KEY,
+  PasscodeRoomInfo,
+  registerPasscodeRoom,
+  checkPasscodeRoom,
+  joinPasscodeRoom,
+  pushPasscodeSync,
+  pullPasscodeSync,
+  generateFriendlyPasscode,
+} from './services/passcodeSyncService';
 import { CloudSyncModal } from './components/CloudSyncModal';
 
 interface BeforeInstallPromptEvent extends Event {
@@ -262,6 +276,34 @@ export default function App() {
   });
   const [hasPendingChanges, setHasPendingChanges] = useState<boolean>(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+
+  // Passcode Room states (友達のログイン不要自動保存)
+  const [activePasscode, setActivePasscode] = useState<string | null>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const urlCode = params.get('passcode') || params.get('code');
+      if (urlCode) return urlCode.trim().toUpperCase();
+      return localStorage.getItem(PASSCODE_STORAGE_KEY) || null;
+    } catch {
+      return null;
+    }
+  });
+  const [isPasscodeOwner, setIsPasscodeOwner] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(PASSCODE_IS_OWNER_KEY) === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [passcodeRoomInfo, setPasscodeRoomInfo] = useState<PasscodeRoomInfo | null>(() => {
+    try {
+      const v = localStorage.getItem(PASSCODE_ROOM_INFO_KEY);
+      return v ? JSON.parse(v) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [cloudSyncModalTab, setCloudSyncModalTab] = useState<'drive' | 'passcode'>('drive');
 
   // Screen & Device Breakpoint Detection (PC: >=1025px, Tablet: 769-1024px, Mobile: <=768px)
   const [windowWidth, setWindowWidth] = useState(() =>
@@ -744,7 +786,153 @@ export default function App() {
     }
   };
 
-  // Debounced Auto-sync on data change (更新内容をGoogle Driveへ自動保存)
+  // =========================================================
+  // Passcode (合言葉) Sharing & Auto-Save Handlers
+  // =========================================================
+  const handleRegisterPasscode = async (code: string): Promise<{ ok: boolean; error?: string }> => {
+    const clean = code.trim().toUpperCase();
+    if (!clean) return { ok: false, error: '合言葉を入力してください' };
+
+    try {
+      const token = getAccessToken();
+      const payload = createSyncPayload(spots, categories, customLists, {
+        uiScale,
+        isLocationEnabled,
+      });
+
+      const res = await registerPasscodeRoom({
+        passcode: clean,
+        ownerName: currentUser?.displayName || currentUser?.email || 'オーナー',
+        driveFileId: syncFileId || undefined,
+        driveAccessToken: token || undefined,
+        syncData: payload,
+      });
+
+      if (res.ok) {
+        setActivePasscode(clean);
+        setIsPasscodeOwner(true);
+        if (res.roomInfo) setPasscodeRoomInfo(res.roomInfo);
+        localStorage.setItem(PASSCODE_STORAGE_KEY, clean);
+        localStorage.setItem(PASSCODE_IS_OWNER_KEY, 'true');
+        if (res.roomInfo) {
+          localStorage.setItem(PASSCODE_ROOM_INFO_KEY, JSON.stringify(res.roomInfo));
+        }
+        showToast(`合言葉「${clean}」を発行しました！友達と共有して自動保存を開始できます`, 'success');
+        return { ok: true };
+      } else {
+        return { ok: false, error: res.error };
+      }
+    } catch (err: any) {
+      return { ok: false, error: err?.message || '合言葉の登録に失敗しました' };
+    }
+  };
+
+  const handleJoinPasscode = async (code: string, fromUrl: boolean = false): Promise<{ ok: boolean; error?: string }> => {
+    const clean = code.trim().toUpperCase();
+    if (!clean) return { ok: false, error: '合言葉を入力してください' };
+
+    try {
+      setIsSyncing(true);
+      const res = await joinPasscodeRoom({
+        passcode: clean,
+        deviceId: getDeviceId(),
+        clientSpots: spots,
+      });
+
+      if (res.ok && res.syncData) {
+        // Smart merge incoming room data with local data
+        const { mergedSpots, mergedCategories, mergedCustomLists } = smartMergeSyncData(
+          { spots, categories, customLists },
+          res.syncData
+        );
+        setSpots(mergedSpots);
+        if (mergedCategories.length > 0) setCategories(mergedCategories);
+        if (mergedCustomLists.length > 0) setCustomLists(mergedCustomLists);
+
+        setActivePasscode(clean);
+        setIsPasscodeOwner(false);
+        if (res.roomInfo) setPasscodeRoomInfo(res.roomInfo);
+        localStorage.setItem(PASSCODE_STORAGE_KEY, clean);
+        localStorage.setItem(PASSCODE_IS_OWNER_KEY, 'false');
+        if (res.roomInfo) {
+          localStorage.setItem(PASSCODE_ROOM_INFO_KEY, JSON.stringify(res.roomInfo));
+        }
+
+        const now = Date.now();
+        setLastSyncTime(now);
+        localStorage.setItem(LAST_SYNC_KEY, String(now));
+        setAutoSaveStatus('saved');
+
+        if (fromUrl) {
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+
+        showToast(
+          `合言葉「${clean}」で接続しました！あなたの追加・編集は友達のGoogleドライブへ自動保存されます`,
+          'success'
+        );
+        return { ok: true };
+      } else {
+        return { ok: false, error: res.error || '合言葉が見つかりませんでした' };
+      }
+    } catch (err: any) {
+      return { ok: false, error: err?.message || '接続エラーが発生しました' };
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleLeavePasscode = () => {
+    const oldCode = activePasscode;
+    setActivePasscode(null);
+    setIsPasscodeOwner(false);
+    setPasscodeRoomInfo(null);
+    localStorage.removeItem(PASSCODE_STORAGE_KEY);
+    localStorage.removeItem(PASSCODE_IS_OWNER_KEY);
+    localStorage.removeItem(PASSCODE_ROOM_INFO_KEY);
+    showToast(`合言葉「${oldCode}」の接続を解除しました（ローカルモードに戻りました）`, 'info');
+  };
+
+  const handleRefreshPasscodeData = async () => {
+    if (!activePasscode) return;
+    try {
+      setIsSyncing(true);
+      const res = await pullPasscodeSync(activePasscode, 0);
+      if (res.ok && res.syncData) {
+        const { mergedSpots, mergedCategories, mergedCustomLists } = smartMergeSyncData(
+          { spots, categories, customLists },
+          res.syncData
+        );
+        setSpots(mergedSpots);
+        if (mergedCategories.length > 0) setCategories(mergedCategories);
+        if (mergedCustomLists.length > 0) setCustomLists(mergedCustomLists);
+        const now = Date.now();
+        setLastSyncTime(now);
+        localStorage.setItem(LAST_SYNC_KEY, String(now));
+        showToast(`合言葉「${activePasscode}」の最新データ（${mergedSpots.length}件）を取得しました`, 'success');
+      }
+    } catch {
+      showToast('最新データの取得に失敗しました', 'error');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // URL query param check on initial mount
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const urlCode = params.get('passcode') || params.get('code');
+      if (urlCode) {
+        const clean = urlCode.trim().toUpperCase();
+        handleJoinPasscode(clean, true);
+      }
+    } catch (e) {
+      console.warn('URL passcode check error:', e);
+    }
+  }, []);
+
+  // Debounced Auto-sync on data change (Google Drive または 合言葉経由で自動保存)
   const isInitialMount = useRef(true);
   useEffect(() => {
     if (isInitialMount.current) {
@@ -753,10 +941,9 @@ export default function App() {
     }
     setHasPendingChanges(true);
 
-    if (!currentUser || !autoSyncEnabled) return;
+    if ((!currentUser && !activePasscode) || !autoSyncEnabled) return;
 
-    const token = getAccessToken();
-    if (!token) return;
+    setAutoSaveStatus('saving');
 
     const timer = setTimeout(async () => {
       try {
@@ -766,37 +953,63 @@ export default function App() {
           isLocationEnabled,
         });
 
-        let targetFileId = syncFileId;
-        if (!targetFileId) {
-          try {
-            const found = await searchSyncFile(token);
-            if (found) {
-              targetFileId = found.id;
-              setSyncFileId(found.id);
-              localStorage.setItem(SYNC_FILE_ID_KEY, found.id);
-            }
-          } catch {
-            // ignore search error
+        const token = getAccessToken();
+
+        // 1. If activePasscode, push to server relay (which updates owner Google Drive!)
+        if (activePasscode) {
+          const pushRes = await pushPasscodeSync({
+            passcode: activePasscode,
+            deviceId: getDeviceId(),
+            syncData: payload,
+            driveAccessToken: token || undefined,
+            driveFileId: syncFileId || undefined,
+          });
+
+          if (pushRes.ok) {
+            const now = Date.now();
+            setLastSyncTime(now);
+            localStorage.setItem(LAST_SYNC_KEY, String(now));
+            setHasPendingChanges(false);
+            setAutoSaveStatus('saved');
           }
         }
 
-        const res = await uploadSyncData(token, payload, targetFileId || undefined);
-        if (!targetFileId || targetFileId !== res.fileId) {
-          setSyncFileId(res.fileId);
-          localStorage.setItem(SYNC_FILE_ID_KEY, res.fileId);
+        // 2. If logged in with Google as Owner, also sync directly with Google Drive API
+        if (currentUser && token) {
+          let targetFileId = syncFileId;
+          if (!targetFileId) {
+            try {
+              const found = await searchSyncFile(token);
+              if (found) {
+                targetFileId = found.id;
+                setSyncFileId(found.id);
+                localStorage.setItem(SYNC_FILE_ID_KEY, found.id);
+              }
+            } catch {
+              // ignore search error
+            }
+          }
+
+          const res = await uploadSyncData(token, payload, targetFileId || undefined);
+          if (!targetFileId || targetFileId !== res.fileId) {
+            setSyncFileId(res.fileId);
+            localStorage.setItem(SYNC_FILE_ID_KEY, res.fileId);
+          }
+          setCloudMeta((prev) =>
+            prev
+              ? { ...prev, id: res.fileId, modifiedTime: res.modifiedTime }
+              : { id: res.fileId, name: SYNC_FILE_NAME, modifiedTime: res.modifiedTime }
+          );
+          setCloudData(payload);
+          const now = Date.now();
+          setLastSyncTime(now);
+          localStorage.setItem(LAST_SYNC_KEY, String(now));
+          setHasPendingChanges(false);
+          setAutoSaveStatus('saved');
         }
-        setCloudMeta((prev) =>
-          prev
-            ? { ...prev, id: res.fileId, modifiedTime: res.modifiedTime }
-            : { id: res.fileId, name: SYNC_FILE_NAME, modifiedTime: res.modifiedTime }
-        );
-        setCloudData(payload);
-        const now = Date.now();
-        setLastSyncTime(now);
-        localStorage.setItem(LAST_SYNC_KEY, String(now));
-        setHasPendingChanges(false);
       } catch (err: unknown) {
         console.warn('Auto sync save error:', err);
+        setAutoSaveStatus('idle');
         if (err instanceof GoogleDriveApiError && err.isTokenExpired) {
           setCachedAccessToken(null);
           setHasToken(false);
@@ -808,13 +1021,39 @@ export default function App() {
     }, 1200);
 
     return () => clearTimeout(timer);
-  }, [spots, categories, customLists, currentUser, autoSyncEnabled, syncFileId, uiScale, isLocationEnabled]);
+  }, [spots, categories, customLists, currentUser, autoSyncEnabled, syncFileId, uiScale, isLocationEnabled, activePasscode]);
 
   // Periodic and window-focus multi-device sync
   useEffect(() => {
-    if (!currentUser || !autoSyncEnabled) return;
+    if (!autoSyncEnabled) return;
+    if (!activePasscode && !currentUser) return;
 
     const checkRemoteUpdate = async () => {
+      // 1. Passcode room update poll
+      if (activePasscode) {
+        try {
+          const res = await pullPasscodeSync(activePasscode, lastSyncTime || 0);
+          if (res.ok && res.hasUpdates && res.syncData) {
+            if (res.syncData.updatedByDevice !== getDeviceId()) {
+              const { mergedSpots, mergedCategories, mergedCustomLists } = smartMergeSyncData(
+                { spots, categories, customLists },
+                res.syncData
+              );
+              setSpots(mergedSpots);
+              if (mergedCategories.length > 0) setCategories(mergedCategories);
+              if (mergedCustomLists.length > 0) setCustomLists(mergedCustomLists);
+              setLastSyncTime(res.lastModified || Date.now());
+              localStorage.setItem(LAST_SYNC_KEY, String(res.lastModified || Date.now()));
+              showToast(`合言葉「${activePasscode}」: 友達がスポットを更新しました（Googleドライブ自動保存中）`, 'info');
+            }
+          }
+        } catch {
+          // ignore background poll error
+        }
+        return;
+      }
+
+      // 2. Personal Google Drive poll
       const token = getAccessToken();
       if (!token) return;
 
@@ -852,13 +1091,13 @@ export default function App() {
     };
 
     window.addEventListener('visibilitychange', handleVisibilityChange);
-    const interval = setInterval(checkRemoteUpdate, 45000);
+    const interval = setInterval(checkRemoteUpdate, 20000);
 
     return () => {
       window.removeEventListener('visibilitychange', handleVisibilityChange);
       clearInterval(interval);
     };
-  }, [currentUser, autoSyncEnabled, lastSyncTime, spots, categories, customLists]);
+  }, [activePasscode, currentUser, autoSyncEnabled, lastSyncTime, spots, categories, customLists]);
 
   // Request Current Location (Geolocation)
   const handleRequestUserLocation = useCallback(() => {
@@ -1639,8 +1878,13 @@ export default function App() {
             onOpenCategoryManager={() => setIsCategoryModalOpen(true)}
             onOpenListSettings={() => setIsListSettingsModalOpen(true)}
             categories={categories}
-            onOpenCloudSync={() => setIsCloudSyncModalOpen(true)}
-            isCloudSyncActive={!!currentUser}
+            onOpenCloudSync={() => {
+              setCloudSyncModalTab(activePasscode && !currentUser ? 'passcode' : 'drive');
+              setIsCloudSyncModalOpen(true);
+            }}
+            isCloudSyncActive={!!currentUser || !!activePasscode}
+            isSyncing={isSyncing}
+            autoSaveStatus={autoSaveStatus}
             onOpenDataModal={() => setIsDataModalOpen(true)}
             activeTab={activeTab}
             onTabChange={setActiveTab}
@@ -1896,6 +2140,23 @@ export default function App() {
                   <span>Webアプリ化</span>
                 </button>
 
+                {/* Passcode (合言葉) Sharing Indicator */}
+                {activePasscode && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCloudSyncModalTab('passcode');
+                      setIsCloudSyncModalOpen(true);
+                    }}
+                    className="px-2.5 sm:px-3 py-1.5 rounded-xl border border-indigo-200 bg-indigo-50/90 hover:bg-indigo-100 text-indigo-900 text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-2xs transition-all"
+                    title={`合言葉「${activePasscode}」で共有中（クリックして設定を開く）`}
+                  >
+                    <Users className="w-3.5 h-3.5 text-indigo-600 flex-shrink-0" />
+                    <span className="font-mono">{activePasscode}</span>
+                    <span className="hidden md:inline text-[11px] font-medium text-indigo-700">共有中</span>
+                  </button>
+                )}
+
                 {/* Google Drive Cloud Sync Modal Trigger */}
                 <button
                   id="header-cloud-sync-btn"
@@ -1903,6 +2164,7 @@ export default function App() {
                     if (currentUser && !hasToken) {
                       handleSignIn();
                     } else {
+                      setCloudSyncModalTab(activePasscode && !currentUser ? 'passcode' : 'drive');
                       setIsCloudSyncModalOpen(true);
                     }
                   }}
@@ -2166,8 +2428,15 @@ export default function App() {
                         onReorderCustomLists={handleReorderCustomLists}
                         onEditSpot={handleOpenEditSpot}
                         onDeleteSpot={handleDeleteSpot}
-                        onOpenCloudSync={() => setIsCloudSyncModalOpen(true)}
-                        isCloudSyncActive={!!currentUser}
+                        onOpenCloudSync={() => {
+                          setCloudSyncModalTab(activePasscode && !currentUser ? 'passcode' : 'drive');
+                          setIsCloudSyncModalOpen(true);
+                        }}
+                        isCloudSyncActive={!!currentUser || !!activePasscode}
+                        isSyncing={isSyncing}
+                        autoSyncEnabled={autoSyncEnabled}
+                        autoSaveStatus={autoSaveStatus}
+                        activePasscode={activePasscode}
                         onFilteredSpotsChange={handleFilteredSpotsChange}
                       />
                     </div>
@@ -2292,8 +2561,15 @@ export default function App() {
                       onReorderCustomLists={handleReorderCustomLists}
                       onEditSpot={handleOpenEditSpot}
                       onDeleteSpot={handleDeleteSpot}
-                      onOpenCloudSync={() => setIsCloudSyncModalOpen(true)}
-                      isCloudSyncActive={!!currentUser}
+                      onOpenCloudSync={() => {
+                        setCloudSyncModalTab(activePasscode && !currentUser ? 'passcode' : 'drive');
+                        setIsCloudSyncModalOpen(true);
+                      }}
+                      isCloudSyncActive={!!currentUser || !!activePasscode}
+                      isSyncing={isSyncing}
+                      autoSyncEnabled={autoSyncEnabled}
+                      autoSaveStatus={autoSaveStatus}
+                      activePasscode={activePasscode}
                       onFilteredSpotsChange={handleFilteredSpotsChange}
                     />
                   </section>
@@ -2439,6 +2715,14 @@ export default function App() {
         onForceOverwriteCloud={handleForceOverwriteCloud}
         onDeleteCloudFile={handleDeleteCloudFile}
         hasPendingChanges={hasPendingChanges}
+        activePasscode={activePasscode}
+        isPasscodeOwner={isPasscodeOwner}
+        passcodeRoomInfo={passcodeRoomInfo}
+        onRegisterPasscode={handleRegisterPasscode}
+        onJoinPasscode={handleJoinPasscode}
+        onLeavePasscode={handleLeavePasscode}
+        onRefreshPasscodeData={handleRefreshPasscodeData}
+        defaultModalTab={cloudSyncModalTab}
       />
 
       {/* Reset Samples Confirmation Modal */}

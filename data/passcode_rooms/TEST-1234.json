@@ -1,0 +1,26 @@
+{
+  "passcode": "TEST-1234",
+  "ownerName": "テストオーナー",
+  "lastModified": 1790687983153,
+  "updatedByDevice": "test",
+  "spotsCount": 1,
+  "syncData": {
+    "version": 1,
+    "appName": "テスト",
+    "lastModified": 123,
+    "updatedByDevice": "test",
+    "spotsCount": 1,
+    "spots": [
+      {
+        "id": "s1",
+        "title": "テストスポット",
+        "lat": 35,
+        "lng": 139,
+        "rating": 5,
+        "isVisited": false
+      }
+    ],
+    "categories": [],
+    "customLists": []
+  }
+}

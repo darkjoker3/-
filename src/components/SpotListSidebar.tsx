@@ -35,8 +35,8 @@ import {
   ListOrdered,
   Cloud,
   CloudCheck,
-  RefreshCw,
   FileSpreadsheet,
+  Users,
 } from 'lucide-react';
 
 interface SpotListSidebarProps {
@@ -80,6 +80,7 @@ interface SpotListSidebarProps {
   isSyncing?: boolean;
   autoSyncEnabled?: boolean;
   autoSaveStatus?: 'idle' | 'saving' | 'saved';
+  activePasscode?: string | null;
   onFilteredSpotsChange?: (filteredSpots: Spot[]) => void;
 }
 
@@ -124,6 +125,7 @@ export const SpotListSidebar: React.FC<SpotListSidebarProps> = ({
   isSyncing = false,
   autoSyncEnabled = true,
   autoSaveStatus = 'idle',
+  activePasscode,
   onFilteredSpotsChange,
 }) => {
   const [draggedTabIndex, setDraggedTabIndex] = useState<number | null>(null);
@@ -1486,6 +1488,8 @@ export const SpotListSidebar: React.FC<SpotListSidebarProps> = ({
                   ? 'Google Drive APIで自動保存中...'
                   : autoSaveStatus === 'saved'
                   ? 'Google Driveへ保存完了'
+                  : activePasscode
+                  ? `合言葉「${activePasscode}」でGoogle Drive自動保存中`
                   : isCloudSyncActive && autoSyncEnabled
                   ? 'Google Drive API自動保存: ON（クリックして同期設定）'
                   : isCloudSyncActive && !autoSyncEnabled
@@ -1497,6 +1501,8 @@ export const SpotListSidebar: React.FC<SpotListSidebarProps> = ({
                   ? 'bg-blue-50 text-blue-700 border-blue-300 animate-pulse shadow-2xs'
                   : autoSaveStatus === 'saved'
                   ? 'bg-emerald-100 text-emerald-900 border-emerald-300 shadow-2xs'
+                  : activePasscode
+                  ? 'bg-indigo-50 text-indigo-800 border-indigo-200 hover:bg-indigo-100'
                   : isCloudSyncActive && autoSyncEnabled
                   ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
                   : isCloudSyncActive && !autoSyncEnabled
@@ -1515,6 +1521,13 @@ export const SpotListSidebar: React.FC<SpotListSidebarProps> = ({
                   <CloudCheck className="w-3.5 h-3.5 text-emerald-600" />
                   <span className="hidden sm:inline">Drive保存完了</span>
                   <span className="sm:hidden">保存完了</span>
+                </>
+              ) : activePasscode ? (
+                <>
+                  <Users className="w-3.5 h-3.5 text-indigo-600" />
+                  <span className="hidden sm:inline">合言葉: {activePasscode} (Drive保存中)</span>
+                  <span className="sm:hidden">{activePasscode}</span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                 </>
               ) : isCloudSyncActive ? (
                 <>

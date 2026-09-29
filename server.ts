@@ -662,6 +662,391 @@ async function startServer() {
     res.json({ status: 'ok' });
   });
 
+  // ==========================================
+  // 合言葉（パスコード）共有＆Google Drive自動保存中継 API
+  // ==========================================
+  const PASSCODE_ROOMS_DIR = path.join(process.cwd(), 'data', 'passcode_rooms');
+  try {
+    if (!fs.existsSync(PASSCODE_ROOMS_DIR)) {
+      fs.mkdirSync(PASSCODE_ROOMS_DIR, { recursive: true });
+    }
+  } catch (e) {
+    console.warn('Could not create passcode rooms dir:', e);
+  }
+
+  interface PasscodeRoomData {
+    passcode: string;
+    ownerName: string;
+    driveFileId?: string;
+    driveAccessToken?: string;
+    tokenUpdatedAt?: number;
+    lastModified: number;
+    updatedByDevice: string;
+    spotsCount: number;
+    lastDriveSavedAt?: number;
+    driveSyncStatus?: 'saved' | 'pending' | 'error';
+    syncData: {
+      version: number;
+      appName: string;
+      lastModified: number;
+      updatedByDevice: string;
+      spotsCount: number;
+      spots: any[];
+      categories: any[];
+      customLists: any[];
+      appSettings?: any;
+    };
+  }
+
+  function getRoomPath(passcode: string): string {
+    const safe = passcode.trim().toUpperCase().replace(/[^A-Za-z0-9_\-]/g, '_');
+    return path.join(PASSCODE_ROOMS_DIR, `${safe}.json`);
+  }
+
+  function readRoom(passcode: string): PasscodeRoomData | null {
+    try {
+      const file = getRoomPath(passcode);
+      if (fs.existsSync(file)) {
+        const content = fs.readFileSync(file, 'utf-8');
+        return JSON.parse(content);
+      }
+    } catch (err) {
+      console.warn(`Error reading room ${passcode}:`, err);
+    }
+    return null;
+  }
+
+  function writeRoom(room: PasscodeRoomData): void {
+    try {
+      const file = getRoomPath(room.passcode);
+      fs.writeFileSync(file, JSON.stringify(room, null, 2), 'utf-8');
+    } catch (err) {
+      console.warn(`Error writing room ${room.passcode}:`, err);
+    }
+  }
+
+  function mergeSyncDataServer(existing: any, incoming: any): any {
+    if (!existing || !existing.spots) return incoming;
+    if (!incoming || !incoming.spots) return existing;
+
+    const spotMap = new Map<string, any>();
+    for (const s of existing.spots) {
+      if (s && s.id) spotMap.set(s.id, s);
+    }
+    for (const s of incoming.spots) {
+      if (!s || !s.id) continue;
+      const prev = spotMap.get(s.id);
+      if (!prev) {
+        spotMap.set(s.id, s);
+      } else {
+        const prevTime = prev.updatedAt || prev.createdAt || 0;
+        const incTime = s.updatedAt || s.createdAt || 0;
+        if (incTime >= prevTime) {
+          spotMap.set(s.id, s);
+        }
+      }
+    }
+
+    // Categories
+    const catMap = new Map<string, any>();
+    for (const c of existing.categories || []) {
+      if (c && c.id) catMap.set(c.id, c);
+    }
+    for (const c of incoming.categories || []) {
+      if (c && c.id) catMap.set(c.id, c);
+    }
+
+    // Custom Lists
+    const listMap = new Map<string, any>();
+    for (const l of existing.customLists || []) {
+      if (l && l.id) listMap.set(l.id, l);
+    }
+    for (const l of incoming.customLists || []) {
+      if (l && l.id) listMap.set(l.id, l);
+    }
+
+    const mergedSpots = Array.from(spotMap.values());
+    return {
+      version: 1,
+      appName: '全国酷道険道・心霊スポット日本地図マップ',
+      lastModified: Date.now(),
+      updatedByDevice: incoming.updatedByDevice || existing.updatedByDevice || '合言葉同期',
+      spotsCount: mergedSpots.length,
+      spots: mergedSpots,
+      categories: Array.from(catMap.values()),
+      customLists: Array.from(listMap.values()),
+      appSettings: incoming.appSettings || existing.appSettings,
+    };
+  }
+
+  async function uploadToGoogleDriveServer(
+    fileId: string,
+    accessToken: string,
+    payload: any
+  ): Promise<boolean> {
+    try {
+      const url = `https://www.googleapis.com/upload/drive/v3/files/${encodeURIComponent(fileId)}?uploadType=media`;
+      const res = await fetch(url, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json; charset=utf-8',
+        },
+        body: JSON.stringify(payload),
+      });
+      return res.ok;
+    } catch (e) {
+      console.warn('Google Drive server upload error:', e);
+      return false;
+    }
+  }
+
+  // 1. オーナーによる合言葉ルームの作成・更新
+  app.post('/api/passcode-sync/register', async (req, res) => {
+    try {
+      const { passcode, ownerName, driveFileId, driveAccessToken, syncData } = req.body;
+      const cleanCode = (passcode || '').trim().toUpperCase();
+      if (!cleanCode) {
+        res.status(400).json({ ok: false, error: '合言葉を指定してください' });
+        return;
+      }
+      if (!syncData) {
+        res.status(400).json({ ok: false, error: '同期データが不足しています' });
+        return;
+      }
+
+      const existing = readRoom(cleanCode);
+      const mergedSyncData = existing ? mergeSyncDataServer(existing.syncData, syncData) : syncData;
+
+      let driveSaved = false;
+      if (driveFileId && driveAccessToken) {
+        driveSaved = await uploadToGoogleDriveServer(driveFileId, driveAccessToken, mergedSyncData);
+      }
+
+      const roomData: PasscodeRoomData = {
+        passcode: cleanCode,
+        ownerName: ownerName || existing?.ownerName || 'オーナー',
+        driveFileId: driveFileId || existing?.driveFileId,
+        driveAccessToken: driveAccessToken || existing?.driveAccessToken,
+        tokenUpdatedAt: driveAccessToken ? Date.now() : existing?.tokenUpdatedAt,
+        lastModified: Date.now(),
+        updatedByDevice: syncData.updatedByDevice || 'オーナー',
+        spotsCount: mergedSyncData.spots?.length || 0,
+        lastDriveSavedAt: driveSaved ? Date.now() : existing?.lastDriveSavedAt,
+        driveSyncStatus: driveSaved ? 'saved' : driveFileId ? 'pending' : undefined,
+        syncData: mergedSyncData,
+      };
+
+      writeRoom(roomData);
+
+      res.json({
+        ok: true,
+        roomInfo: {
+          passcode: roomData.passcode,
+          ownerName: roomData.ownerName,
+          lastModified: roomData.lastModified,
+          spotsCount: roomData.spotsCount,
+          updatedByDevice: roomData.updatedByDevice,
+          hasDriveLink: !!(roomData.driveFileId && roomData.driveAccessToken),
+          lastDriveSavedAt: roomData.lastDriveSavedAt,
+        },
+        driveSaved,
+      });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: err?.message || '登録エラー' });
+    }
+  });
+
+  // 2. 合言葉ルームの情報取得
+  app.get('/api/passcode-sync/room', (req, res) => {
+    try {
+      const rawCode = (req.query.passcode as string) || '';
+      const cleanCode = rawCode.trim().toUpperCase();
+      if (!cleanCode) {
+        res.status(400).json({ ok: false, error: '合言葉を指定してください' });
+        return;
+      }
+
+      const room = readRoom(cleanCode);
+      if (!room) {
+        res.status(404).json({ ok: false, error: '合言葉が見つかりません。入力内容をご確認ください。' });
+        return;
+      }
+
+      res.json({
+        ok: true,
+        roomInfo: {
+          passcode: room.passcode,
+          ownerName: room.ownerName,
+          lastModified: room.lastModified,
+          spotsCount: room.spotsCount,
+          updatedByDevice: room.updatedByDevice,
+          hasDriveLink: !!(room.driveFileId && room.driveAccessToken),
+          lastDriveSavedAt: room.lastDriveSavedAt,
+        },
+      });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: err?.message || '取得エラー' });
+    }
+  });
+
+  // 3. 友達（またはオーナー）が合言葉で参加・初期データ取得
+  app.post('/api/passcode-sync/join', async (req, res) => {
+    try {
+      const { passcode, deviceId, clientSpots } = req.body;
+      const cleanCode = (passcode || '').trim().toUpperCase();
+      if (!cleanCode) {
+        res.status(400).json({ ok: false, error: '合言葉を指定してください' });
+        return;
+      }
+
+      const room = readRoom(cleanCode);
+      if (!room) {
+        res.status(404).json({ ok: false, error: '合言葉が見つかりません。入力内容をご確認ください。' });
+        return;
+      }
+
+      // クライアント側に未保存スポットがあればスマートマージ
+      let updatedData = room.syncData;
+      if (Array.isArray(clientSpots) && clientSpots.length > 0) {
+        const clientSyncData = {
+          version: 1,
+          appName: '全国酷道険道・心霊スポット日本地図マップ',
+          lastModified: Date.now(),
+          updatedByDevice: deviceId || '友達端末',
+          spotsCount: clientSpots.length,
+          spots: clientSpots,
+          categories: [],
+          customLists: [],
+        };
+        updatedData = mergeSyncDataServer(room.syncData, clientSyncData);
+        room.syncData = updatedData;
+        room.spotsCount = updatedData.spots.length;
+        room.lastModified = Date.now();
+        room.updatedByDevice = deviceId || '友達端末';
+
+        if (room.driveFileId && room.driveAccessToken) {
+          const driveOk = await uploadToGoogleDriveServer(room.driveFileId, room.driveAccessToken, updatedData);
+          if (driveOk) {
+            room.lastDriveSavedAt = Date.now();
+            room.driveSyncStatus = 'saved';
+          }
+        }
+        writeRoom(room);
+      }
+
+      res.json({
+        ok: true,
+        roomInfo: {
+          passcode: room.passcode,
+          ownerName: room.ownerName,
+          lastModified: room.lastModified,
+          spotsCount: room.spotsCount,
+          updatedByDevice: room.updatedByDevice,
+          hasDriveLink: !!(room.driveFileId && room.driveAccessToken),
+          lastDriveSavedAt: room.lastDriveSavedAt,
+        },
+        syncData: room.syncData,
+      });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: err?.message || '参加エラー' });
+    }
+  });
+
+  // 4. 友達（またはオーナー）からの自動保存プッシュ
+  app.post('/api/passcode-sync/push', async (req, res) => {
+    try {
+      const { passcode, deviceId, syncData, driveAccessToken, driveFileId } = req.body;
+      const cleanCode = (passcode || '').trim().toUpperCase();
+      if (!cleanCode) {
+        res.status(400).json({ ok: false, error: '合言葉を指定してください' });
+        return;
+      }
+      if (!syncData) {
+        res.status(400).json({ ok: false, error: '同期データが不足しています' });
+        return;
+      }
+
+      const room = readRoom(cleanCode);
+      if (!room) {
+        res.status(404).json({ ok: false, error: '合言葉ルームが存在しません' });
+        return;
+      }
+
+      // オーナーからのトークン更新があれば反映
+      if (driveAccessToken) room.driveAccessToken = driveAccessToken;
+      if (driveFileId) room.driveFileId = driveFileId;
+
+      // 既存データとマージ
+      const merged = mergeSyncDataServer(room.syncData, syncData);
+      merged.updatedByDevice = deviceId || syncData.updatedByDevice || '友達端末';
+      room.syncData = merged;
+      room.spotsCount = merged.spots.length;
+      room.lastModified = Date.now();
+      room.updatedByDevice = merged.updatedByDevice;
+
+      // オーナーのGoogle Driveへ即座に自動保存を実行
+      let driveSaved = false;
+      if (room.driveFileId && room.driveAccessToken) {
+        driveSaved = await uploadToGoogleDriveServer(room.driveFileId, room.driveAccessToken, merged);
+        if (driveSaved) {
+          room.lastDriveSavedAt = Date.now();
+          room.driveSyncStatus = 'saved';
+        } else {
+          room.driveSyncStatus = 'pending';
+        }
+      }
+
+      writeRoom(room);
+
+      res.json({
+        ok: true,
+        lastModified: room.lastModified,
+        spotsCount: room.spotsCount,
+        driveSaved,
+      });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: err?.message || '保存エラー' });
+    }
+  });
+
+  // 5. 変更検知用ロング/ショートポーリング
+  app.get('/api/passcode-sync/pull', (req, res) => {
+    try {
+      const rawCode = (req.query.passcode as string) || '';
+      const since = parseInt((req.query.since as string) || '0', 10);
+      const cleanCode = rawCode.trim().toUpperCase();
+
+      if (!cleanCode) {
+        res.status(400).json({ ok: false, error: '合言葉を指定してください' });
+        return;
+      }
+
+      const room = readRoom(cleanCode);
+      if (!room) {
+        res.status(404).json({ ok: false, error: '合言葉ルームが存在しません' });
+        return;
+      }
+
+      if (room.lastModified > since) {
+        res.json({
+          ok: true,
+          hasUpdates: true,
+          syncData: room.syncData,
+          lastModified: room.lastModified,
+          lastDriveSavedAt: room.lastDriveSavedAt,
+        });
+      } else {
+        res.json({
+          ok: true,
+          hasUpdates: false,
+        });
+      }
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: err?.message || '取得エラー' });
+    }
+  });
+
   // Static asset serving helper with strict MIME types for Safari & older browsers
   const distPath = path.join(process.cwd(), 'dist');
   const staticMiddleware = express.static(distPath, {
